@@ -1,8 +1,8 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as argon from 'argon2';
-import { RegisterDto } from './dto/index.dto';
+import { RegisterDto } from './dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole } from '@prisma/client';
+import { UserRole, UserStatus } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -70,4 +70,71 @@ export class UserService {
       throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
   }
+
+  async getAllUsers(currentUser: any) {
+    let whereClause: any = {};
+
+    if (currentUser.role !== UserRole.ADMIN) {
+      whereClause = {
+        status: UserStatus.ACTIVE,
+        deletedAt: null,
+      };
+    }
+    // If ADMIN, no where clause, gets all
+
+    const allUsers = await this.prisma.user.findMany({ where: whereClause });
+    return allUsers.map(({ password, id, ...rest }) => rest);
+  }
+
+  async getOneUser(uuid: string, currentUser: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { uuid },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    const isOwner = currentUser.uuid === user.uuid;
+    const isAdmin = currentUser.role === UserRole.ADMIN;
+
+    // Check visibility
+    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+      if (!isAdmin) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+    } else if (user.status === UserStatus.INACTIVE) {
+      if (!isAdmin && !isOwner) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+    }
+
+    const { password, id, ...userWithoutPasswordAndId } = user;
+    return userWithoutPasswordAndId;
+  }
+
+  async deleteUser(uuid: string, currentUser: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { uuid },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    const isOwner = currentUser.uuid === user.uuid;
+    const isAdmin = currentUser.role === UserRole.ADMIN;
+
+    if (!isAdmin && !isOwner) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+
+    await this.prisma.user.update({
+      where: { uuid },
+      data: { deletedAt: new Date() },
+    });
+
+    return { message: 'User deleted successfully' };
+  }
 }
+

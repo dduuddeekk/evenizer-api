@@ -1,12 +1,12 @@
-import { Controller, Post, Body, HttpStatus, Patch, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete } from '@nestjs/common';
 import { UserService } from './user.service';
-import { RegisterDto, UpdateUserDto, UpdateUserAdminDto } from './dto/index.dto';
-import { APIResponse } from '../common/dto/index.dto';
-import { JwtAuthGuard } from '../common/guards/index.guard';
+import { RegisterDto, UpdateUserAdminDto } from './dto';
+import { APIResponse } from '../common/dto';
+import { JwtAuthGuard } from '../common/guards';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -32,4 +32,44 @@ export class UserController {
       user,
     );
   }
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async getAllUsers(@Req() req: any) {
+    const users = await this.userService.getAllUsers(req.user);
+    return new APIResponse(
+      HttpStatus.OK,
+      'Users retrieved successfully',
+      users,
+    );
+  }
+
+  @Get(':uuid')
+  @UseGuards(JwtAuthGuard)
+  async getOneUser(
+    @Param('uuid') uuid: string,
+    @Req() req: any,
+  ) {
+    const user = await this.userService.getOneUser(uuid, req.user);
+    return new APIResponse(
+      HttpStatus.OK,
+      'User retrieved successfully',
+      user,
+    );
+  }
+
+  @Delete(':uuid')
+  @UseGuards(JwtAuthGuard)
+  async deleteUser(
+    @Param('uuid') uuid: string,
+    @Req() req: any,
+  ) {
+    const result = await this.userService.deleteUser(uuid, req.user);
+    return new APIResponse(
+      HttpStatus.OK,
+      result.message,
+      null,
+    );
+  }
 }
+

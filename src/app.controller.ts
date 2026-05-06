@@ -1,6 +1,6 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { AppService } from './app.service';
-import { APIResponse, ErrorResponse } from './common/dto/index.dto';
+import { APIResponse, ErrorResponse } from './common/dto';
 import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
@@ -8,7 +8,7 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @Get()
   getHello(): APIResponse<{ value: string; version: string }> {

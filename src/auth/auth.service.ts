@@ -1,9 +1,9 @@
 import { Injectable, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import * as argon from 'argon2';
 import { JwtService } from '@nestjs/jwt';
-import { LoginDto, DeviceType, RefreshTokenDto } from './dto/index.dto';
+import { LoginDto, DeviceType, RefreshTokenDto } from './dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { TokenType } from '@prisma/client';
+import { TokenType, UserStatus } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +24,10 @@ export class AuthService {
 
     if (!user) {
       throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+    }
+
+    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+      throw new HttpException('Account is banned or deleted', HttpStatus.UNAUTHORIZED);
     }
 
     const isPasswordValid = await argon.verify(user.password, dto.password);
@@ -127,6 +131,10 @@ export class AuthService {
     // 3. Generate new Access Token
     const user = await this.prisma.user.findUnique({ where: { id: existingToken.userId } });
     if (!user) throw new UnauthorizedException('User not found');
+
+    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+      throw new UnauthorizedException('Account is banned or deleted');
+    }
 
     const payload = { sub: user.uuid };
     const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
