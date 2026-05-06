@@ -74,7 +74,7 @@ model User {
   uuid       String     @default(uuid())
   email      String     @unique
   password   String
-  firtstName String     @map("first_name")
+  firstName  String     @map("first_name")
   lastName   String     @map("last_name")
   username   String     @unique
   isVerified Boolean    @default(false) @map("is_verified")
@@ -97,9 +97,9 @@ model User {
   tickets          Ticket[]
   followOrganizers FollowOrganizer[]
   favouriteEvents  FavouriteEvent[]
-  
-  followers        FollowUser[] @relation("Following")
-  following        FollowUser[] @relation("Follower")
+
+  followers FollowUser[] @relation("Following")
+  following FollowUser[] @relation("Follower")
 
   @@map("users")
 }
@@ -145,9 +145,9 @@ model Event {
   eventOrganizers EventOrganizer[]
   ticketTiers     TicketTier[]
   transactions    Transaction[]
-  
+
   // FIX: Added opposite relation for FavouriteEvent
-  favouritedBy    FavouriteEvent[]
+  favouritedBy FavouriteEvent[]
 
   @@map("events")
 }
@@ -225,9 +225,9 @@ model Organizer {
   roles            Role[]
   organizerMembers OrganizerMember[]
   eventOrganizers  EventOrganizer[]
-  
+
   // FIX: Added opposite relation for FollowOrganizer
-  followers        FollowOrganizer[]
+  followers FollowOrganizer[]
 
   @@map("organizers")
 }

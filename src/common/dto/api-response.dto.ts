@@ -54,7 +54,7 @@ export class ErrorResponse {
 
   constructor(status: HttpStatus, message: string, error: any) {
     this.success = false;
-    this.code = HttpStatus[status]; // Mengambil teks otomatis, misal 404 -> "NOT_FOUND"
+    this.code = HttpStatus[status];
     this.message = message;
     this.error = error;
   }
