@@ -1,14 +1,15 @@
 import { Injectable, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import * as argon from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto, DeviceType, RefreshTokenDto } from './dto/index.dto';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
-  private prisma = new PrismaClient();
-
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private prisma: PrismaService,
+  ) {}
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findFirst({

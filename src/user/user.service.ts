@@ -1,11 +1,11 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import * as argon from 'argon2';
 import { RegisterDto } from './dto/index.dto';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UserService {
-  private prisma = new PrismaClient();
+  constructor(private readonly prisma: PrismaService) {}
 
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({

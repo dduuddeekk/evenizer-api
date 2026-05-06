@@ -1,11 +1,14 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { AppService } from './app.service';
 import { APIResponse, ErrorResponse } from './common/dto/index.dto';
-import { PrismaClient } from '@prisma/client';
+import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   getHello(): APIResponse<{ value: string; version: string }> {
@@ -16,9 +19,7 @@ export class AppController {
   async checkHealth(): Promise<APIResponse<string>> {
     try {
       // Cek koneksi ke database
-      const prisma = new PrismaClient();
-      await prisma.$queryRaw`SELECT 1`;
-      await prisma.$disconnect();
+      await this.prisma.$queryRaw`SELECT 1`;
 
       return new APIResponse<string>(HttpStatus.OK, 'Server is healthy', 'Database connection OK');
     } catch (error) {
