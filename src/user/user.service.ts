@@ -71,6 +71,24 @@ export class UserService {
     }
   }
 
+  async updateProfileImage(uuid: string, imageUrl: string, currentUser: any) {
+    if (currentUser.role !== UserRole.ADMIN && currentUser.uuid !== uuid) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { uuid },
+        data: { profile: imageUrl },
+      });
+
+      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+      return userWithoutPasswordAndId;
+    } catch (error) {
+      throw new HttpException('Failed to update profile image', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   async getAllUsers(currentUser: any) {
     let whereClause: any = {};
 

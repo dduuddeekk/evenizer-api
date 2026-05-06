@@ -1,12 +1,17 @@
-import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
+import { UploadService } from '../upload/upload.service';
 import { RegisterDto, UpdateUserAdminDto } from './dto';
 import { APIResponse } from '../common/dto';
 import { JwtAuthGuard } from '../common/guards';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(
+    private readonly userService: UserService,
+    private readonly uploadService: UploadService,
+  ) { }
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -69,6 +74,24 @@ export class UserController {
       HttpStatus.OK,
       result.message,
       null,
+    );
+  }
+
+  @Patch(':uuid/profile')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProfile(
+    @Param('uuid') uuid: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    const imageUrl = await this.uploadService.saveImage(file, 'profile', uuid);
+    const user = await this.userService.updateProfileImage(uuid, imageUrl, req.user);
+    
+    return new APIResponse(
+      HttpStatus.OK,
+      'Profile image updated successfully',
+      user,
     );
   }
 }
