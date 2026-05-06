@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, HttpStatus, Delete } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, RefreshTokenDto } from './dto';
 import { APIResponse } from '../common/dto';
@@ -14,7 +14,7 @@ export class AuthController {
     return new APIResponse(HttpStatus.OK, 'Login successful', result);
   }
 
-  @Post('logout')
+  @Delete('logout')
   @UseGuards(JwtAuthGuard)
   async logout(@Req() req: any) {
     // req.headers.authorization will have "Bearer <token>"
