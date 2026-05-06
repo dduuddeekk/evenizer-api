@@ -2,6 +2,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TokenType } from '@prisma/client';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -16,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(req: any, payload: any) {
     const rawToken = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-    
+
     if (!rawToken) {
       throw new UnauthorizedException('Token not found');
     }
@@ -35,7 +36,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: {
         token: rawToken,
         userId: user.id,
-        type: 'ACCESS',
+        type: TokenType.ACCESS,
         deletedAt: null,
       },
     });

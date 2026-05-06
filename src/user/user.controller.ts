@@ -1,7 +1,8 @@
-import { Controller, Post, Body, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
-import { RegisterDto } from './dto/index.dto';
+import { RegisterDto, UpdateUserDto, UpdateUserAdminDto } from './dto/index.dto';
 import { APIResponse } from '../common/dto/index.dto';
+import { JwtAuthGuard } from '../common/guards/index.guard';
 
 @Controller('user')
 export class UserController {
@@ -13,6 +14,21 @@ export class UserController {
     return new APIResponse(
       HttpStatus.CREATED,
       'User registered successfully',
+      user,
+    );
+  }
+
+  @Patch(':uuid')
+  @UseGuards(JwtAuthGuard)
+  async updateUser(
+    @Param('uuid') uuid: string,
+    @Body() dto: UpdateUserAdminDto,
+    @Req() req: any,
+  ) {
+    const user = await this.userService.updateUser(uuid, dto, req.user);
+    return new APIResponse(
+      HttpStatus.OK,
+      'User updated successfully',
       user,
     );
   }

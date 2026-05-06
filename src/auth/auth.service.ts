@@ -3,17 +3,18 @@ import * as argon from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto, DeviceType, RefreshTokenDto } from './dto/index.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { TokenType } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findFirst({
-      where: { 
+      where: {
         OR: [
           { email: dto.identifier },
           { username: dto.identifier }
@@ -41,14 +42,14 @@ export class AuthService {
       await this.prisma.token.create({
         data: {
           token: accessToken,
-          type: 'ACCESS',
+          type: TokenType.ACCESS,
           expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
           userId: user.id,
         },
       });
 
-      const { password, ...userWithoutPassword } = user;
-      return { user: userWithoutPassword, accessToken };
+      const { password, id, ...userWithoutPasswordAndId } = user;
+      return { user: userWithoutPasswordAndId, accessToken };
     } else {
       // Web: Access Token (short) + Refresh Token (long)
       const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
@@ -61,7 +62,7 @@ export class AuthService {
       await this.prisma.token.create({
         data: {
           token: accessToken,
-          type: 'ACCESS',
+          type: TokenType.ACCESS,
           expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
           userId: user.id,
         },
@@ -71,14 +72,14 @@ export class AuthService {
       await this.prisma.token.create({
         data: {
           token: refreshToken,
-          type: 'REFRESH',
+          type: TokenType.REFRESH,
           expiresAt: new Date(Date.now() + jwtExpiresDay * 24 * 60 * 60 * 1000),
           userId: user.id,
         },
       });
 
-      const { password, ...userWithoutPassword } = user;
-      return { user: userWithoutPassword, accessToken, refreshToken };
+      const { password, id, ...userWithoutPasswordAndId } = user;
+      return { user: userWithoutPasswordAndId, accessToken, refreshToken };
     }
   }
 
@@ -101,9 +102,9 @@ export class AuthService {
   async refresh(dto: RefreshTokenDto) {
     // 1. Verify if refresh token is in DB and active
     const existingToken = await this.prisma.token.findFirst({
-      where: { 
+      where: {
         token: dto.refreshToken,
-        type: 'REFRESH',
+        type: TokenType.REFRESH,
         deletedAt: null
       },
     });
@@ -135,7 +136,7 @@ export class AuthService {
     await this.prisma.token.create({
       data: {
         token: newAccessToken,
-        type: 'ACCESS',
+        type: TokenType.ACCESS,
         expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
         userId: user.id,
       },

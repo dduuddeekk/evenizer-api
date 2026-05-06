@@ -2,10 +2,11 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as argon from 'argon2';
 import { RegisterDto } from './dto/index.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -32,8 +33,41 @@ export class UserService {
       },
     });
 
-    const { password, ...userWithoutPassword } = newUser;
+    const { password, id, ...userWithoutPasswordAndId } = newUser;
 
-    return userWithoutPassword;
+    return userWithoutPasswordAndId;
+  }
+
+  async updateUser(uuid: string, dto: any, currentUser: any) {
+    if (currentUser.role !== UserRole.ADMIN && currentUser.uuid !== uuid) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+
+    const dataToUpdate: any = { ...dto };
+
+    // Prevent non-admin from updating restricted fields
+    if (currentUser.role !== UserRole.ADMIN) {
+      delete dataToUpdate.email;
+      delete dataToUpdate.role;
+      delete dataToUpdate.isVerified;
+    }
+
+    // Always prevent id, uuid, password update from this endpoint
+    delete dataToUpdate.id;
+    delete dataToUpdate.uuid;
+    delete dataToUpdate.password;
+
+    try {
+      // Find the user to get their actual ID if needed, or update directly by UUID since it's unique
+      const updatedUser = await this.prisma.user.update({
+        where: { uuid },
+        data: dataToUpdate,
+      });
+
+      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+      return userWithoutPasswordAndId;
+    } catch (error) {
+      throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
+    }
   }
 }

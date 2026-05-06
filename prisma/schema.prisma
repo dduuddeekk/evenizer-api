@@ -82,7 +82,7 @@ enum TicketStatus {
 
 model User {
   id         Int        @id @default(autoincrement())
-  uuid       String     @default(uuid())
+  uuid       String     @unique @default(uuid())
   email      String     @unique
   password   String
   firstName  String     @map("first_name")
@@ -119,7 +119,7 @@ model User {
 
 model Token {
   id        Int       @id @default(autoincrement())
-  uuid      String    @default(uuid())
+  uuid      String    @unique @default(uuid())
   token     String
   type      TokenType
   expiresAt DateTime  @map("expires_at")
@@ -136,7 +136,7 @@ model Token {
 
 model Event {
   id       Int         @id @default(autoincrement())
-  uuid     String      @default(uuid())
+  uuid     String      @unique @default(uuid())
   title    String
   start    DateTime
   end      DateTime
@@ -167,7 +167,7 @@ model Event {
 
 model Category {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   eventId Int   @map("event_id")
   event   Event @relation(fields: [eventId], references: [id])
@@ -183,7 +183,7 @@ model Category {
 
 model CategoryDetail {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
   name String
 
   categoryId Int      @map("category_id")
@@ -198,7 +198,7 @@ model CategoryDetail {
 
 model Rundown {
   id         Int               @id @default(autoincrement())
-  uuid       String            @default(uuid())
+  uuid       String            @unique @default(uuid())
   title      String
   date       DateTime
   start      DateTime
@@ -222,7 +222,7 @@ model Rundown {
 
 model Organizer {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
   name String
 
   userId Int  @map("user_id")
@@ -247,7 +247,7 @@ model Organizer {
 
 model Role {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
   name String
 
   organizerId Int       @map("organizer_id")
@@ -267,7 +267,7 @@ model Role {
 
 model OrganizerMember {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   organizerId Int       @map("organizer_id")
   organizer   Organizer @relation(fields: [organizerId], references: [id])
@@ -285,7 +285,7 @@ model OrganizerMember {
 
 model EventOrganizer {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   eventId     Int       @map("event_id")
   event       Event     @relation(fields: [eventId], references: [id])
@@ -303,7 +303,7 @@ model EventOrganizer {
 
 model EventOrganizerDetail {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   eventOrganizerId Int            @map("event_organizer_id")
   eventOrganizer   EventOrganizer @relation(fields: [eventOrganizerId], references: [id])
@@ -319,7 +319,7 @@ model EventOrganizerDetail {
 
 model TicketTier {
   id        Int      @id @default(autoincrement())
-  uuid      String   @default(uuid())
+  uuid      String   @unique @default(uuid())
   name      String
   price     Float
   quantity  Int
@@ -342,7 +342,7 @@ model TicketTier {
 
 model Transaction {
   id            Int           @id @default(autoincrement())
-  uuid          String        @default(uuid())
+  uuid          String        @unique @default(uuid())
   invoiceNumber String        @unique @map("invoice_number")
   amount        Float
   paymentMethod PaymentMethod @map("payment_method")
@@ -366,7 +366,7 @@ model Transaction {
 
 model Ticket {
   id     Int          @id @default(autoincrement())
-  uuid   String       @default(uuid())
+  uuid   String       @unique @default(uuid())
   code   String       @unique
   status TicketStatus @default(UNUSED)
 
@@ -386,7 +386,7 @@ model Ticket {
 
 model FollowUser {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   followingId Int  @map("following_id")
   following   User @relation("Following", fields: [followingId], references: [id])
@@ -402,7 +402,7 @@ model FollowUser {
 
 model FollowOrganizer {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   organizerId Int       @map("organizer_id")
   organizer   Organizer @relation(fields: [organizerId], references: [id])
@@ -418,7 +418,7 @@ model FollowOrganizer {
 
 model FavouriteEvent {
   id   Int    @id @default(autoincrement())
-  uuid String @default(uuid())
+  uuid String @unique @default(uuid())
 
   eventId Int   @map("event_id")
   event   Event @relation(fields: [eventId], references: [id])
