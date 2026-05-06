@@ -5,11 +5,21 @@
 
 generator client {
   provider = "prisma-client-js"
-  engineType = "library"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHERS
 }
 
 enum UserStatus {
@@ -80,11 +90,13 @@ model User {
   username   String     @unique
   isVerified Boolean    @default(false) @map("is_verified")
   status     UserStatus @default(ACTIVE)
+  role       UserRole   @default(USER)
 
   profile     String?
   birthdate   DateTime?
   bio         String?   @db.Text
   phoneNumber String?   @map("phone_number")
+  gender      Gender?
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
