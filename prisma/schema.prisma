@@ -1,0 +1,420 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum TokenType {
+  ACCESS
+  REFRESH
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum EventStatus {
+  DRAFT
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RundownStatus {
+  DRAFT
+  PENDING
+  ONGOING
+  SKIPPED
+  FINISHED
+}
+
+enum RundownVisibility {
+  PUBLIC
+  INTERNAL
+  RESTRICTED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  QRIS
+  BANK_TRANSFER
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  EXPIRED
+}
+
+enum TicketStatus {
+  UNUSED
+  ATTENDED
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id         Int        @id @default(autoincrement())
+  uuid       String     @default(uuid())
+  email      String     @unique
+  password   String
+  firtstName String     @map("first_name")
+  lastName   String     @map("last_name")
+  username   String     @unique
+  isVerified Boolean    @default(false) @map("is_verified")
+  status     UserStatus @default(ACTIVE)
+
+  profile     String?
+  birthdate   DateTime?
+  bio         String?   @db.Text
+  phoneNumber String?   @map("phone_number")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tokens           Token[]
+  events           Event[]
+  organizers       Organizer[]
+  organizerMembers OrganizerMember[]
+  transactions     Transaction[]
+  tickets          Ticket[]
+  followOrganizers FollowOrganizer[]
+  favouriteEvents  FavouriteEvent[]
+  
+  followers        FollowUser[] @relation("Following")
+  following        FollowUser[] @relation("Follower")
+
+  @@map("users")
+}
+
+model Token {
+  id        Int       @id @default(autoincrement())
+  uuid      String    @default(uuid())
+  token     String
+  type      TokenType
+  expiresAt DateTime  @map("expires_at")
+
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("tokens")
+}
+
+model Event {
+  id       Int         @id @default(autoincrement())
+  uuid     String      @default(uuid())
+  title    String
+  start    DateTime
+  end      DateTime
+  status   EventStatus @default(DRAFT)
+  isPublic Boolean     @default(false) @map("is_public")
+
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  banner      String? @db.Text
+  description String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  categories      Category[]
+  rundowns        Rundown[]
+  eventOrganizers EventOrganizer[]
+  ticketTiers     TicketTier[]
+  transactions    Transaction[]
+  
+  // FIX: Added opposite relation for FavouriteEvent
+  favouritedBy    FavouriteEvent[]
+
+  @@map("events")
+}
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  categoryDetails CategoryDetail[]
+
+  @@map("categories")
+}
+
+model CategoryDetail {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+  name String
+
+  categoryId Int      @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("category_details")
+}
+
+model Rundown {
+  id         Int               @id @default(autoincrement())
+  uuid       String            @default(uuid())
+  title      String
+  date       DateTime
+  start      DateTime
+  end        DateTime
+  status     RundownStatus     @default(DRAFT)
+  visibility RundownVisibility @default(PUBLIC)
+
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+
+  description String?   @db.Text
+  actualStart DateTime? @map("actual_start")
+  actualEnd   DateTime? @map("actual_end")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("rundowns")
+}
+
+model Organizer {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+  name String
+
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  description String? @db.Text
+  logo        String?
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  roles            Role[]
+  organizerMembers OrganizerMember[]
+  eventOrganizers  EventOrganizer[]
+  
+  // FIX: Added opposite relation for FollowOrganizer
+  followers        FollowOrganizer[]
+
+  @@map("organizers")
+}
+
+model Role {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+  name String
+
+  organizerId Int       @map("organizer_id")
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+
+  description String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  organizerMembers      OrganizerMember[]
+  eventOrganizerDetails EventOrganizerDetail[]
+
+  @@map("roles")
+}
+
+model OrganizerMember {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  organizerId Int       @map("organizer_id")
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  userId      Int       @map("user_id")
+  user        User      @relation(fields: [userId], references: [id])
+  roleId      Int       @map("role_id")
+  role        Role      @relation(fields: [roleId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("organizer_members")
+}
+
+model EventOrganizer {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  eventId     Int       @map("event_id")
+  event       Event     @relation(fields: [eventId], references: [id])
+  organizerId Int       @map("organizer_id")
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  eventOrganizerDetails EventOrganizerDetail[]
+
+  @@map("event_organizers")
+}
+
+model EventOrganizerDetail {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  eventOrganizerId Int            @map("event_organizer_id")
+  eventOrganizer   EventOrganizer @relation(fields: [eventOrganizerId], references: [id])
+  roleId           Int            @map("role_id")
+  role             Role           @relation(fields: [roleId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("event_organizer_details")
+}
+
+model TicketTier {
+  id        Int      @id @default(autoincrement())
+  uuid      String   @default(uuid())
+  name      String
+  price     Float
+  quantity  Int
+  startSale DateTime @map("start_sale")
+  endSale   DateTime @map("end_sale")
+
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+
+  description String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tickets Ticket[]
+
+  @@map("ticket_tiers")
+}
+
+model Transaction {
+  id            Int           @id @default(autoincrement())
+  uuid          String        @default(uuid())
+  invoiceNumber String        @unique @map("invoice_number")
+  amount        Float
+  paymentMethod PaymentMethod @map("payment_method")
+  status        PaymentStatus @default(PENDING) @map("status")
+
+  userId  Int   @map("user_id")
+  user    User  @relation(fields: [userId], references: [id])
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+
+  paidAt DateTime? @map("paid_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tickets Ticket[]
+
+  @@map("transactions")
+}
+
+model Ticket {
+  id     Int          @id @default(autoincrement())
+  uuid   String       @default(uuid())
+  code   String       @unique
+  status TicketStatus @default(UNUSED)
+
+  transactionId Int         @map("transaction_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  ticketTierId  Int         @map("ticket_tier_id")
+  ticketTier    TicketTier  @relation(fields: [ticketTierId], references: [id])
+  userId        Int         @map("user_id")
+  user          User        @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("tickets")
+}
+
+model FollowUser {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  followingId Int  @map("following_id")
+  following   User @relation("Following", fields: [followingId], references: [id])
+  followerId  Int  @map("follower_id")
+  follower    User @relation("Follower", fields: [followerId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("follow_users")
+}
+
+model FollowOrganizer {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  organizerId Int       @map("organizer_id")
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  userId      Int       @map("user_id")
+  user        User      @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("follow_organizers")
+}
+
+model FavouriteEvent {
+  id   Int    @id @default(autoincrement())
+  uuid String @default(uuid())
+
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+  userId  Int   @map("user_id")
+  user    User  @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("favourite_events")
+}

@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: evenizer-container
+    env_file: 
+      - .env
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    ports:
+      - ${DATABASE_PORT}:5432
+    volumes:
+      - evenizer-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  evenizer-postgres-data:
