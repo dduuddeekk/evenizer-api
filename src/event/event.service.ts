@@ -169,6 +169,126 @@ export class EventService {
     }
   }
 
+  async getEventsByOrganizer(user: any, organizerUuid: string, query: GetEventsQueryDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Verify organizer exists and user has permission
+      const organizer = await tx.organizer.findFirst({
+        where: { uuid: organizerUuid, deletedAt: null },
+        include: { organizerMembers: true }
+      });
+
+      if (!organizer) {
+        throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+      }
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || organizer.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isMember = organizer.organizerMembers.some(om => om.userId === user.id);
+        if (isMember) hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+      }
+
+      // 2. Fetch all events connected to this organizer via EventOrganizer
+      const { search, category, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
+      const page = Number(query.page) || 1;
+      const limit = Number(query.limit) || 10;
+      
+      const andConditions: any[] = [
+        {
+          deletedAt: null,
+          eventOrganizers: {
+            some: { organizerId: organizer.id }
+          }
+        }
+      ];
+
+      if (search) {
+        andConditions.push({ title: { contains: search } });
+      }
+
+      if (status) {
+        andConditions.push({ status });
+      }
+
+      if (isPublic !== undefined) {
+        andConditions.push({ isPublic });
+      }
+
+      if (category) {
+        andConditions.push({
+          categories: {
+            some: {
+              categoryDetails: {
+                some: { name: { contains: category } }
+              }
+            }
+          }
+        });
+      }
+
+      const finalWhere = { AND: andConditions };
+
+      if (groupBy) {
+        const groupedEvents = await tx.event.groupBy({
+          by: [groupBy as any],
+          where: finalWhere,
+          _count: { id: true },
+        });
+
+        if (!groupedEvents || groupedEvents.length === 0) {
+          throw new HttpException('No events found', HttpStatus.NOT_FOUND);
+        }
+
+        return { data: groupedEvents, meta: { groupBy } };
+      }
+
+      const skip = (page - 1) * limit;
+      let orderByClause: any;
+
+      if (sortBy === 'favourited') {
+        orderByClause = { favouritedBy: { _count: sortOrder } };
+      } else {
+        orderByClause = { [sortBy]: sortOrder };
+      }
+
+      const [total, events] = await Promise.all([
+        tx.event.count({ where: finalWhere }),
+        tx.event.findMany({
+          where: finalWhere,
+          include: {
+            categories: { include: { categoryDetails: true } },
+            ticketTiers: true,
+            _count: { select: { favouritedBy: true } }
+          },
+          orderBy: orderByClause,
+          skip,
+          take: limit,
+        })
+      ]);
+
+      if (!events || events.length === 0) {
+        throw new HttpException('No events found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        data: events,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        }
+      };
+    });
+
+    return result;
+  }
+
   async createEvent(user: any, dto: CreateEventDto) {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -739,6 +859,81 @@ export class EventService {
       });
 
       return { message: 'Rundown deleted successfully' };
+    });
+
+    return result;
+  }
+
+  async addFavouriteEvent(user: any, eventUuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Check if already favorited
+      const existingFavourite = await tx.favouriteEvent.findFirst({
+        where: { eventId: event.id, userId: user.id, deletedAt: null }
+      });
+
+      if (existingFavourite) {
+        throw new HttpException('Event is already in your favourites', HttpStatus.BAD_REQUEST);
+      }
+
+      // Check if there's a soft-deleted favourite
+      const softDeletedFavourite = await tx.favouriteEvent.findFirst({
+        where: { eventId: event.id, userId: user.id }
+      });
+
+      if (softDeletedFavourite) {
+        // Restore it
+        await tx.favouriteEvent.update({
+          where: { id: softDeletedFavourite.id },
+          data: { deletedAt: null }
+        });
+      } else {
+        // Create new
+        await tx.favouriteEvent.create({
+          data: {
+            eventId: event.id,
+            userId: user.id
+          }
+        });
+      }
+
+      return { message: 'Event added to favourites' };
+    });
+
+    return result;
+  }
+
+  async removeFavouriteEvent(user: any, eventUuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      const existingFavourite = await tx.favouriteEvent.findFirst({
+        where: { eventId: event.id, userId: user.id, deletedAt: null }
+      });
+
+      if (!existingFavourite) {
+        throw new HttpException('Event is not in your favourites', HttpStatus.BAD_REQUEST);
+      }
+
+      await tx.favouriteEvent.update({
+        where: { id: existingFavourite.id },
+        data: { deletedAt: new Date() }
+      });
+
+      return { message: 'Event removed from favourites' };
     });
 
     return result;

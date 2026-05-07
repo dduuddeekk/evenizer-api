@@ -32,6 +32,30 @@ export class EventController {
     }
   }
 
+  @Get('organizer/:organizerUuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async getEventsByOrganizer(
+    @Req() req: any,
+    @Param('organizerUuid') organizerUuid: string,
+    @Query() query: GetEventsQueryDto,
+  ) {
+    try {
+      const events = await this.eventService.getEventsByOrganizer(req.user, organizerUuid, query);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Events retrieved successfully',
+        events,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -235,6 +259,52 @@ export class EventController {
       return new APIResponse(
         HttpStatus.OK,
         'Rundown deleted successfully',
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':uuid/favourite')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async addFavouriteEvent(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+  ) {
+    try {
+      const result = await this.eventService.addFavouriteEvent(req.user, uuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        result.message,
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':uuid/favourite')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async removeFavouriteEvent(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+  ) {
+    try {
+      const result = await this.eventService.removeFavouriteEvent(req.user, uuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        result.message,
         result,
       );
     } catch (error: any) {
