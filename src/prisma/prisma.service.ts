@@ -8,8 +8,19 @@ import * as dotenv from 'dotenv';
 export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor() {
     dotenv.config();
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    
+    // Use pooled connection URL for PrismaClient with adapter
+    // For migrations, Prisma will use DATABASE_DIRECT_URL if available
+    const databaseUrl = process.env.DATABASE_URL;
+    
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+
+    // Create adapter for direct PostgreSQL connection
+    const pool = new Pool({ connectionString: databaseUrl });
     const adapter = new PrismaPg(pool);
+    
     super({ adapter } as any);
   }
 
