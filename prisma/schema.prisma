@@ -101,16 +101,17 @@ enum TicketStatus {
 }
 
 model User {
-  id         Int        @id @default(autoincrement())
-  uuid       String     @unique @default(uuid())
-  email      String     @unique
-  password   String
-  firstName  String     @map("first_name")
-  lastName   String     @map("last_name")
-  username   String     @unique
-  isVerified Boolean    @default(false) @map("is_verified")
-  status     UserStatus @default(ACTIVE)
-  role       UserRole   @default(USER)
+  id              Int        @id @default(autoincrement())
+  uuid            String     @unique @default(uuid())
+  email           String     @unique
+  password        String
+  firstName       String     @map("first_name")
+  lastName        String     @map("last_name")
+  username        String     @unique
+  isEmailVerified Boolean    @default(false) @map("is_email_verified")
+  isVerified      Boolean    @default(false) @map("is_verified")
+  status          UserStatus @default(ACTIVE)
+  role            UserRole   @default(USER)
 
   profile     String?
   birthdate   DateTime?

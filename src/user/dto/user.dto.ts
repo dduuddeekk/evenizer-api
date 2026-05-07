@@ -90,3 +90,13 @@ export class UpdateUserAdminDto extends UpdateUserDto {
   @IsBoolean()
   isVerified?: boolean;
 }
+
+export const VerifyUserSchema = z.object({
+  isVerified: z.boolean(),
+});
+
+export class VerifyUserDto {
+  @Type(() => Boolean)
+  @IsBoolean()
+  isVerified: boolean;
+}

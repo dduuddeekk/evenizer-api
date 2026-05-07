@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Req, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UserRole } from '@prisma/client';
 import { OrganizerService } from './organizer.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
-import { OptionalJwtAuthGuard, JwtAuthGuard } from '../common/guards';
-import { GetOrganizersQueryDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto } from './dto';
+import { OptionalJwtAuthGuard, JwtAuthGuard, RolesGuard } from '../common/guards';
+import { Roles } from '../common/decorators/roles.decorator';
+import { GetOrganizersQueryDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto, VerifyOrganizerDto } from './dto';
 
 const err = (e: any) => new HttpException(
     new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', e?.message || e),
@@ -145,6 +147,37 @@ export class OrganizerController {
         try {
             const result = await this.organizerService.deleteOrganizer(req.user, uuid);
             return new APIResponse(HttpStatus.OK, result.message, null);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
+    @Post(':uuid/follow')
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard)
+    async followOrganizer(@Req() req: any, @Param('uuid') uuid: string) {
+        try {
+            const result = await this.organizerService.followOrganizer(uuid, req.user);
+            return new APIResponse(HttpStatus.OK, 'Successfully followed organizer', result);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
+    @Delete(':uuid/follow')
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard)
+    async unfollowOrganizer(@Req() req: any, @Param('uuid') uuid: string) {
+        try {
+            const result = await this.organizerService.unfollowOrganizer(uuid, req.user);
+            return new APIResponse(HttpStatus.OK, 'Successfully unfollowed organizer', result);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
+    @Patch(':uuid/verify')
+    @ApiBearerAuth()
+    @Roles(UserRole.ADMIN)
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    async verifyOrganizer(@Param('uuid') uuid: string, @Body() dto: VerifyOrganizerDto) {
+        try {
+            const organizer = await this.organizerService.verifyOrganizer(uuid, dto.isVerified);
+            return new APIResponse(HttpStatus.OK, 'Organizer verification status updated successfully', organizer);
         } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
     }
 }

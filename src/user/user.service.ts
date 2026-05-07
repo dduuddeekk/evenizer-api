@@ -192,4 +192,80 @@ export class UserService {
 
     return result;
   }
+
+  async followUser(targetUuid: string, currentUser: any) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const targetUser = await tx.user.findUnique({ where: { uuid: targetUuid } });
+      if (!targetUser) throw new HttpException('Target user not found', HttpStatus.NOT_FOUND);
+      
+      if (targetUser.id === currentUser.id) {
+        throw new HttpException('You cannot follow yourself', HttpStatus.BAD_REQUEST);
+      }
+
+      const existingFollow = await tx.followUser.findFirst({
+        where: {
+          followerId: currentUser.id,
+          followingId: targetUser.id,
+        }
+      });
+
+      if (existingFollow) {
+        return { message: 'Already following this user' };
+      }
+
+      await tx.followUser.create({
+        data: {
+          followerId: currentUser.id,
+          followingId: targetUser.id,
+        }
+      });
+
+      return { message: 'Successfully followed user' };
+    });
+
+    return result;
+  }
+
+  async unfollowUser(targetUuid: string, currentUser: any) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const targetUser = await tx.user.findUnique({ where: { uuid: targetUuid } });
+      if (!targetUser) throw new HttpException('Target user not found', HttpStatus.NOT_FOUND);
+
+      const existingFollow = await tx.followUser.findFirst({
+        where: {
+          followerId: currentUser.id,
+          followingId: targetUser.id,
+        }
+      });
+
+      if (!existingFollow) {
+        return { message: 'You are not following this user' };
+      }
+
+      await tx.followUser.delete({
+        where: { id: existingFollow.id },
+      });
+
+      return { message: 'Successfully unfollowed user' };
+    });
+
+    return result;
+  }
+
+  async verifyUser(uuid: string, isVerified: boolean) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { uuid } });
+      if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+      const updatedUser = await tx.user.update({
+        where: { uuid },
+        data: { isVerified },
+      });
+
+      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+      return userWithoutPasswordAndId;
+    });
+
+    return result;
+  }
 }

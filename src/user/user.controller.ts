@@ -4,7 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { UserService } from './user.service';
 import { UploadService } from '../upload/upload.service';
-import { RegisterDto, UpdateUserDto, UpdateUserAdminDto } from './dto';
+import { RegisterDto, UpdateUserDto, UpdateUserAdminDto, VerifyUserDto } from './dto';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -190,6 +190,76 @@ export class UserController {
       return new APIResponse(
         HttpStatus.OK,
         'Profile image updated successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':uuid/follow')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async followUser(
+    @Param('uuid') uuid: string,
+    @Req() req: any,
+  ) {
+    try {
+      const result = await this.userService.followUser(uuid, req.user);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Successfully followed user',
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':uuid/follow')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async unfollowUser(
+    @Param('uuid') uuid: string,
+    @Req() req: any,
+  ) {
+    try {
+      const result = await this.userService.unfollowUser(uuid, req.user);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Successfully unfollowed user',
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':uuid/verify')
+  @ApiBearerAuth()
+  @Roles(UserRole.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  async verifyUser(
+    @Param('uuid') uuid: string,
+    @Body() dto: VerifyUserDto,
+  ) {
+    try {
+      const user = await this.userService.verifyUser(uuid, dto.isVerified);
+      return new APIResponse(
+        HttpStatus.OK,
+        'User verification status updated successfully',
         user,
       );
     } catch (error: any) {

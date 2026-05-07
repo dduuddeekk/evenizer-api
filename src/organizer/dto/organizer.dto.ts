@@ -65,8 +65,6 @@ export class GetOrganizersQueryDto {
     sortOrder?: SortOrder = SortOrder.DESC;
 }
 
-// ─── Create Organizer ────────────────────────────────────────────────────────
-
 export const CreateOrganizerSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     description: z.string().optional(),
@@ -87,8 +85,6 @@ export class CreateOrganizerDto {
     @IsBoolean()
     isPublic?: boolean;
 }
-
-// ─── Update Organizer ─────────────────────────────────────────────────────────
 
 export const UpdateOrganizerSchema = z.object({
     name: z.string().min(1).optional(),
@@ -115,8 +111,6 @@ export class UpdateOrganizerDto {
     @IsEnum(OrganizerStatus)
     status?: OrganizerStatus;
 }
-
-// ─── Role Management ─────────────────────────────────────────────────────────
 
 export const CreateRoleSchema = z.object({
     name: z.string().min(1, 'Role name is required'),
@@ -147,8 +141,6 @@ export class UpdateRoleDto {
     @IsString()
     description?: string;
 }
-
-// ─── Member Management ───────────────────────────────────────────────────────
 
 export const InviteMemberSchema = z.object({
     userUuid: z.string().uuid('Invalid user UUID'),
@@ -183,4 +175,14 @@ export class UpdateMemberDto {
     @IsOptional()
     @IsString()
     reason?: string;
+}
+
+export const VerifyOrganizerSchema = z.object({
+    isVerified: z.boolean(),
+});
+
+export class VerifyOrganizerDto {
+    @Type(() => Boolean)
+    @IsBoolean()
+    isVerified: boolean;
 }

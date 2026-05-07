@@ -461,4 +461,75 @@ export class OrganizerService {
         });
         return result;
     }
+
+    async followOrganizer(organizerUuid: string, currentUser: any) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await tx.organizer.findUnique({ where: { uuid: organizerUuid } });
+            if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+
+            const existingFollow = await tx.followOrganizer.findFirst({
+                where: {
+                    userId: currentUser.id,
+                    organizerId: organizer.id,
+                }
+            });
+
+            if (existingFollow) {
+                return { message: 'Already following this organizer' };
+            }
+
+            await tx.followOrganizer.create({
+                data: {
+                    userId: currentUser.id,
+                    organizerId: organizer.id,
+                }
+            });
+
+            return { message: 'Successfully followed organizer' };
+        });
+
+        return result;
+    }
+
+    async unfollowOrganizer(organizerUuid: string, currentUser: any) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await tx.organizer.findUnique({ where: { uuid: organizerUuid } });
+            if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+
+            const existingFollow = await tx.followOrganizer.findFirst({
+                where: {
+                    userId: currentUser.id,
+                    organizerId: organizer.id,
+                }
+            });
+
+            if (!existingFollow) {
+                return { message: 'You are not following this organizer' };
+            }
+
+            await tx.followOrganizer.delete({
+                where: { id: existingFollow.id },
+            });
+
+            return { message: 'Successfully unfollowed organizer' };
+        });
+
+        return result;
+    }
+
+    async verifyOrganizer(uuid: string, isVerified: boolean) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await tx.organizer.findUnique({ where: { uuid } });
+            if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+
+            const updatedOrganizer = await tx.organizer.update({
+                where: { id: organizer.id },
+                data: { isVerified },
+            });
+
+            return updatedOrganizer;
+        });
+
+        return result;
+    }
 }

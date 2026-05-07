@@ -15,13 +15,24 @@ async function main() {
 
     const admin = await prisma.user.upsert({
         where: { email: process.env.ADMIN_EMAIL! },
-        update: {},
+        update: {
+            password: hashedPassword,
+            firstName: process.env.ADMIN_FIRSTNAME!,
+            lastName: process.env.ADMIN_LASTNAME!,
+            username: process.env.ADMIN_USERNAME!,
+            isEmailVerified: true,
+            isVerified: true,
+            role: UserRole.ADMIN,
+            gender: Gender.OTHERS,
+            status: UserStatus.ACTIVE,
+        },
         create: {
             email: process.env.ADMIN_EMAIL!,
             password: hashedPassword,
             firstName: process.env.ADMIN_FIRSTNAME!,
             lastName: process.env.ADMIN_LASTNAME!,
             username: process.env.ADMIN_USERNAME!,
+            isEmailVerified: true,
             isVerified: true,
             role: UserRole.ADMIN,
             gender: Gender.OTHERS,
@@ -29,7 +40,7 @@ async function main() {
         },
     });
 
-    console.log("Admin seeded:", admin.email);
+    console.log("Admin seeded/updated:", admin.email);
 }
 
 main()
