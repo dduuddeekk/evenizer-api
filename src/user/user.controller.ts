@@ -4,6 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { UserService } from './user.service';
 import { UploadService } from '../upload/upload.service';
+import type { UploadedFile as UploadedFileData } from '../common/types';
 import { RegisterDto, UpdateUserDto, UpdateUserAdminDto, VerifyUserDto } from './dto';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
@@ -152,7 +153,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadMyProfile(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: UploadedFileData,
     @Req() req: any,
   ) {
     try {
@@ -181,7 +182,7 @@ export class UserController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadProfile(
     @Param('uuid') uuid: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: UploadedFileData,
   ) {
     try {
       const imageUrl = await this.uploadService.saveImage(file, 'profile', uuid);

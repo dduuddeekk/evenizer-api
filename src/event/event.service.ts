@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus, MemberStatus } from '@prisma/client';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 import { UploadService } from '../upload/upload.service';
+import type { UploadedFile as UploadedFileData } from '../common/types';
 
 @Injectable()
 export class EventService {
@@ -721,7 +722,7 @@ export class EventService {
     return result;
   }
 
-  async uploadBanner(user: any, uuid: string, file: Express.Multer.File) {
+  async uploadBanner(user: any, uuid: string, file: UploadedFileData) {
     const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },

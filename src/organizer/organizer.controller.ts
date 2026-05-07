@@ -6,6 +6,7 @@ import { OrganizerService } from './organizer.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { OptionalJwtAuthGuard, JwtAuthGuard, RolesGuard } from '../common/guards';
 import { Roles } from '../common/decorators/roles.decorator';
+import type { UploadedFile as UploadedFileData } from '../common/types';
 import { GetOrganizersQueryDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto, VerifyOrganizerDto } from './dto';
 
 const err = (e: any) => new HttpException(
@@ -133,7 +134,7 @@ export class OrganizerController {
     @ApiConsumes('multipart/form-data')
     @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
     @UseInterceptors(FileInterceptor('file'))
-    async uploadLogo(@Req() req: any, @Param('uuid') uuid: string, @UploadedFile() file: Express.Multer.File) {
+    async uploadLogo(@Req() req: any, @Param('uuid') uuid: string, @UploadedFile() file: UploadedFileData) {
         try {
             const organizer = await this.organizerService.uploadLogo(req.user, uuid, file);
             return new APIResponse(HttpStatus.OK, 'Logo updated successfully', organizer);

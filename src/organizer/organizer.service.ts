@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { UserRole, OrganizerStatus, EventOrganizerStatus, MemberStatus } from '@prisma/client';
 import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema, UpdateOrganizerDto, UpdateOrganizerSchema, CreateRoleDto, CreateRoleSchema, UpdateRoleDto, UpdateRoleSchema, InviteMemberDto, InviteMemberSchema, UpdateMemberDto, UpdateMemberSchema } from './dto';
+import type { UploadedFile as UploadedFileData } from '../common/types';
+import { UploadedFile } from 'src/common/types/uploaded-file.type';
 
 @Injectable()
 export class OrganizerService {
@@ -432,7 +434,7 @@ export class OrganizerService {
         return result;
     }
 
-    async uploadLogo(user: any, organizerUuid: string, file: Express.Multer.File) {
+    async uploadLogo(user: any, organizerUuid: string, file: UploadedFileData) {
         const result = await this.prisma.$transaction(async (tx) => {
             const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
 

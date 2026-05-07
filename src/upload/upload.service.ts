@@ -2,10 +2,11 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ErrorResponse } from '../common/dto';
+import type { UploadedFile as UploadedFileData } from '../common/types';
 
 @Injectable()
 export class UploadService {
-  async saveImage(file: Express.Multer.File, category: 'profile' | 'banner' | 'logo', uuid: string): Promise<string> {
+  async saveImage(file: UploadedFileData, category: 'profile' | 'banner' | 'logo', uuid: string): Promise<string> {
     try {
       if (!file) {
         throw new HttpException('File is required', HttpStatus.BAD_REQUEST);

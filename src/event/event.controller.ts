@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { JwtAuthGuard, OptionalJwtAuthGuard } from '../common/guards';
+import type { UploadedFile as UploadedFileData } from '../common/types';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 
 @Controller('event')
@@ -194,7 +195,7 @@ export class EventController {
   async uploadBanner(
     @Req() req: any,
     @Param('uuid') uuid: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: UploadedFileData,
   ) {
     try {
       const event = await this.eventService.uploadBanner(req.user, uuid, file);
