@@ -69,6 +69,14 @@ enum EventOrganizerStatus {
   REJECTED
 }
 
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  BANNED
+  REJECTED
+}
+
 enum PaymentMethod {
   CREDIT_CARD
   DEBIT_CARD
@@ -286,8 +294,11 @@ model OrganizerMember {
   organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   userId      Int       @map("user_id")
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleId      Int       @map("role_id")
-  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId      Int?      @map("role_id")
+  role        Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  status MemberStatus @default(PENDING)
+  reason String?      @db.Text
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")

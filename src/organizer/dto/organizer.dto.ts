@@ -1,7 +1,7 @@
 import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { z } from 'zod';
-import { OrganizerStatus } from '@prisma/client';
+import { OrganizerStatus, MemberStatus } from '@prisma/client';
 
 export enum SortOrder {
     ASC = 'asc',
@@ -65,6 +65,8 @@ export class GetOrganizersQueryDto {
     sortOrder?: SortOrder = SortOrder.DESC;
 }
 
+// ─── Create Organizer ────────────────────────────────────────────────────────
+
 export const CreateOrganizerSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     description: z.string().optional(),
@@ -84,4 +86,101 @@ export class CreateOrganizerDto {
     @Type(() => Boolean)
     @IsBoolean()
     isPublic?: boolean;
+}
+
+// ─── Update Organizer ─────────────────────────────────────────────────────────
+
+export const UpdateOrganizerSchema = z.object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+    isPublic: z.boolean().optional(),
+    status: z.nativeEnum(OrganizerStatus).optional(),
+});
+
+export class UpdateOrganizerDto {
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    isPublic?: boolean;
+
+    @IsOptional()
+    @IsEnum(OrganizerStatus)
+    status?: OrganizerStatus;
+}
+
+// ─── Role Management ─────────────────────────────────────────────────────────
+
+export const CreateRoleSchema = z.object({
+    name: z.string().min(1, 'Role name is required'),
+    description: z.string().optional(),
+});
+
+export class CreateRoleDto {
+    @IsNotEmpty()
+    @IsString()
+    name: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+}
+
+export const UpdateRoleSchema = z.object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+});
+
+export class UpdateRoleDto {
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    description?: string;
+}
+
+// ─── Member Management ───────────────────────────────────────────────────────
+
+export const InviteMemberSchema = z.object({
+    userUuid: z.string().uuid('Invalid user UUID'),
+    roleUuid: z.string().uuid().optional(),
+});
+
+export class InviteMemberDto {
+    @IsNotEmpty()
+    @IsString()
+    userUuid: string;
+
+    @IsOptional()
+    @IsString()
+    roleUuid?: string;
+}
+
+export const UpdateMemberSchema = z.object({
+    roleUuid: z.string().uuid().optional(),
+    status: z.nativeEnum(MemberStatus).optional(),
+    reason: z.string().optional(),
+});
+
+export class UpdateMemberDto {
+    @IsOptional()
+    @IsString()
+    roleUuid?: string;
+
+    @IsOptional()
+    @IsEnum(MemberStatus)
+    status?: MemberStatus;
+
+    @IsOptional()
+    @IsString()
+    reason?: string;
 }

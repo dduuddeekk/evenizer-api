@@ -1,11 +1,15 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole, OrganizerStatus, EventOrganizerStatus } from '@prisma/client';
-import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema } from './dto';
+import { UploadService } from '../upload/upload.service';
+import { UserRole, OrganizerStatus, EventOrganizerStatus, MemberStatus } from '@prisma/client';
+import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema, UpdateOrganizerDto, UpdateOrganizerSchema, CreateRoleDto, CreateRoleSchema, UpdateRoleDto, UpdateRoleSchema, InviteMemberDto, InviteMemberSchema, UpdateMemberDto, UpdateMemberSchema } from './dto';
 
 @Injectable()
 export class OrganizerService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly uploadService: UploadService,
+    ) { }
 
     async getAllOrganizers(user: any, query: GetOrganizersQueryDto) {
         try {
@@ -25,7 +29,7 @@ export class OrganizerService {
                     whereClause.OR.push({ userId: user.id });
                     whereClause.OR.push({
                         organizerMembers: {
-                            some: { userId: user.id }
+                            some: { userId: user.id, status: MemberStatus.ACTIVE }
                         }
                     });
                 }
@@ -162,7 +166,7 @@ export class OrganizerService {
                 if (!user) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
                 const isOwner = organizer.userId === user.id;
                 const isAdmin = user.role === UserRole.ADMIN;
-                const isMember = organizer.organizerMembers.some(om => om.userId === user.id);
+                const isMember = organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE);
                 if (!isOwner && !isAdmin && !isMember) {
                     throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
                 }
@@ -197,7 +201,7 @@ export class OrganizerService {
                     isAffiliated = true;
                 } else {
                     isAffiliated = event.eventOrganizers.some(eo =>
-                        eo.organizer.organizerMembers.some(om => om.userId === user.id)
+                        eo.organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE)
                     );
                 }
             }
@@ -228,6 +232,233 @@ export class OrganizerService {
             return eventOrganizers;
         });
 
+        return result;
+    }
+
+    // ─── ROLE MANAGEMENT ─────────────────────────────────────────────────────
+
+    private async assertOrganizerOwnerOrAdmin(tx: any, organizerUuid: string, user: any) {
+        const organizer = await tx.organizer.findFirst({
+            where: { uuid: organizerUuid, deletedAt: null }
+        });
+        if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+        if (user.role !== UserRole.ADMIN && organizer.userId !== user.id) {
+            throw new HttpException('Forbidden: only organizer owner or admin', HttpStatus.FORBIDDEN);
+        }
+        return organizer;
+    }
+
+    async createRole(user: any, organizerUuid: string, dto: CreateRoleDto) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+            const parsed = CreateRoleSchema.parse(dto);
+
+            const role = await tx.role.create({
+                data: {
+                    name: parsed.name,
+                    description: parsed.description,
+                    organizerId: organizer.id,
+                }
+            });
+
+            return role;
+        });
+        return result;
+    }
+
+    async updateRole(user: any, organizerUuid: string, roleUuid: string, dto: UpdateRoleDto) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+            const parsed = UpdateRoleSchema.parse(dto);
+
+            const role = await tx.role.findFirst({
+                where: { uuid: roleUuid, organizerId: organizer.id, deletedAt: null }
+            });
+            if (!role) throw new HttpException('Role not found', HttpStatus.NOT_FOUND);
+
+            const updated = await tx.role.update({
+                where: { id: role.id },
+                data: { ...parsed }
+            });
+
+            return updated;
+        });
+        return result;
+    }
+
+    async deleteRole(user: any, organizerUuid: string, roleUuid: string) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+
+            const role = await tx.role.findFirst({
+                where: { uuid: roleUuid, organizerId: organizer.id, deletedAt: null }
+            });
+            if (!role) throw new HttpException('Role not found', HttpStatus.NOT_FOUND);
+
+            await tx.role.update({
+                where: { id: role.id },
+                data: { deletedAt: new Date() }
+            });
+
+            return { message: 'Role deleted successfully' };
+        });
+        return result;
+    }
+
+    // ─── MEMBER MANAGEMENT ───────────────────────────────────────────────────
+
+    async inviteMember(user: any, organizerUuid: string, dto: InviteMemberDto) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+            const parsed = InviteMemberSchema.parse(dto);
+
+            const targetUser = await tx.user.findFirst({
+                where: { uuid: parsed.userUuid, deletedAt: null }
+            });
+            if (!targetUser) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+            // Check if already a member (any status)
+            const existing = await tx.organizerMember.findFirst({
+                where: { organizerId: organizer.id, userId: targetUser.id, deletedAt: null }
+            });
+            if (existing) {
+                throw new HttpException(`User is already ${existing.status.toLowerCase()} in this organizer`, HttpStatus.BAD_REQUEST);
+            }
+
+            let roleId: number | undefined = undefined;
+            if (parsed.roleUuid) {
+                const role = await tx.role.findFirst({
+                    where: { uuid: parsed.roleUuid, organizerId: organizer.id, deletedAt: null }
+                });
+                if (!role) throw new HttpException('Role not found or does not belong to this organizer', HttpStatus.NOT_FOUND);
+                roleId = role.id;
+            }
+
+            const member = await tx.organizerMember.create({
+                data: {
+                    organizerId: organizer.id,
+                    userId: targetUser.id,
+                    roleId: roleId ?? null,
+                    status: MemberStatus.PENDING,
+                },
+                include: {
+                    user: { select: { uuid: true, firstName: true, lastName: true, username: true, profile: true } },
+                    role: true,
+                }
+            });
+
+            return member;
+        });
+        return result;
+    }
+
+    async updateMember(user: any, organizerUuid: string, memberUuid: string, dto: UpdateMemberDto) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+            const parsed = UpdateMemberSchema.parse(dto);
+
+            const member = await tx.organizerMember.findFirst({
+                where: { uuid: memberUuid, organizerId: organizer.id, deletedAt: null }
+            });
+            if (!member) throw new HttpException('Member not found', HttpStatus.NOT_FOUND);
+
+            const dataToUpdate: any = {};
+
+            if (parsed.status) {
+                dataToUpdate.status = parsed.status;
+                if (parsed.reason) dataToUpdate.reason = parsed.reason;
+            }
+
+            if (parsed.roleUuid) {
+                const role = await tx.role.findFirst({
+                    where: { uuid: parsed.roleUuid, organizerId: organizer.id, deletedAt: null }
+                });
+                if (!role) throw new HttpException('Role not found or does not belong to this organizer', HttpStatus.NOT_FOUND);
+                dataToUpdate.roleId = role.id;
+            }
+
+            const updated = await tx.organizerMember.update({
+                where: { id: member.id },
+                data: dataToUpdate,
+                include: {
+                    user: { select: { uuid: true, firstName: true, lastName: true, username: true, profile: true } },
+                    role: true,
+                }
+            });
+
+            return updated;
+        });
+        return result;
+    }
+
+    async removeMember(user: any, organizerUuid: string, memberUuid: string) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+
+            const member = await tx.organizerMember.findFirst({
+                where: { uuid: memberUuid, organizerId: organizer.id, deletedAt: null }
+            });
+            if (!member) throw new HttpException('Member not found', HttpStatus.NOT_FOUND);
+
+            await tx.organizerMember.update({
+                where: { id: member.id },
+                data: { deletedAt: new Date() }
+            });
+
+            return { message: 'Member removed successfully' };
+        });
+        return result;
+    }
+
+    // ─── UPDATE / DELETE ORGANIZER ───────────────────────────────────────────
+
+    async updateOrganizer(user: any, organizerUuid: string, dto: UpdateOrganizerDto) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+            const parsed = UpdateOrganizerSchema.parse(dto);
+
+            // Non-admin cannot change status (only admin can verify/ban)
+            if (parsed.status && user.role !== UserRole.ADMIN) {
+                throw new HttpException('Only admin can change organizer status', HttpStatus.FORBIDDEN);
+            }
+
+            const updated = await tx.organizer.update({
+                where: { id: organizer.id },
+                data: { ...parsed },
+            });
+
+            return updated;
+        });
+        return result;
+    }
+
+    async uploadLogo(user: any, organizerUuid: string, file: Express.Multer.File) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+
+            const logoUrl = await this.uploadService.saveImage(file, 'logo', organizer.uuid);
+
+            const updated = await tx.organizer.update({
+                where: { id: organizer.id },
+                data: { logo: logoUrl },
+            });
+
+            return updated;
+        });
+        return result;
+    }
+
+    async deleteOrganizer(user: any, organizerUuid: string) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await this.assertOrganizerOwnerOrAdmin(tx, organizerUuid, user);
+
+            await tx.organizer.update({
+                where: { id: organizer.id },
+                data: { deletedAt: new Date() },
+            });
+
+            return { message: 'Organizer deleted successfully' };
+        });
         return result;
     }
 }

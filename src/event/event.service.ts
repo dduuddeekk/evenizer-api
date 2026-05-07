@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus } from '@prisma/client';
+import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus, MemberStatus } from '@prisma/client';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 import { UploadService } from '../upload/upload.service';
 
@@ -38,7 +38,8 @@ export class EventService {
                     organizer: {
                       organizerMembers: {
                         some: {
-                          userId: user.id
+                          userId: user.id,
+                          status: MemberStatus.ACTIVE, // Only ACTIVE members can see
                         }
                       }
                     }
@@ -658,7 +659,7 @@ export class EventService {
         hasPermission = true;
       } else {
         const isAffiliated = event.eventOrganizers.some(eo => 
-          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          eo.organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE)
         );
         if (isAffiliated) hasPermission = true;
       }
@@ -740,7 +741,7 @@ export class EventService {
         hasPermission = true;
       } else {
         const isAffiliated = event.eventOrganizers.some(eo => 
-          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          eo.organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE)
         );
         if (isAffiliated) hasPermission = true;
       }
@@ -806,7 +807,7 @@ export class EventService {
         hasPermission = true;
       } else {
         const isAffiliated = event.eventOrganizers.some(eo => 
-          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          eo.organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE)
         );
         if (isAffiliated) hasPermission = true;
       }
@@ -844,7 +845,7 @@ export class EventService {
         hasPermission = true;
       } else {
         const isAffiliated = event.eventOrganizers.some(eo => 
-          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          eo.organizer.organizerMembers.some(om => om.userId === user.id && om.status === MemberStatus.ACTIVE)
         );
         if (isAffiliated) hasPermission = true;
       }
@@ -881,17 +882,10 @@ export class EventService {
 
       if (!event) throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
 
-      let hasPermission = false;
-      if (user.role === UserRole.ADMIN || event.userId === user.id) {
-        hasPermission = true;
-      } else {
-        const isAffiliated = event.eventOrganizers.some(eo => 
-          eo.organizer.organizerMembers.some(om => om.userId === user.id)
-        );
-        if (isAffiliated) hasPermission = true;
+      // Strictly Owner or Admin only — regular organizer members cannot delete rundowns
+      if (user.role !== UserRole.ADMIN && event.userId !== user.id) {
+        throw new HttpException('Only Event Owner or Admin can delete rundowns', HttpStatus.FORBIDDEN);
       }
-
-      if (!hasPermission) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
 
       const rundown = await tx.rundown.findFirst({
         where: { uuid: rundownUuid, eventId: event.id, deletedAt: null }
