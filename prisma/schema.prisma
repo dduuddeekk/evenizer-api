@@ -125,7 +125,7 @@ model Token {
   expiresAt DateTime  @map("expires_at")
 
   userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -144,7 +144,7 @@ model Event {
   isPublic Boolean     @default(false) @map("is_public")
 
   userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   banner      String? @db.Text
   description String? @db.Text
@@ -159,7 +159,6 @@ model Event {
   ticketTiers     TicketTier[]
   transactions    Transaction[]
 
-  // FIX: Added opposite relation for FavouriteEvent
   favouritedBy FavouriteEvent[]
 
   @@map("events")
@@ -170,7 +169,7 @@ model Category {
   uuid String @unique @default(uuid())
 
   eventId Int   @map("event_id")
-  event   Event @relation(fields: [eventId], references: [id])
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -187,7 +186,7 @@ model CategoryDetail {
   name String
 
   categoryId Int      @map("category_id")
-  category   Category @relation(fields: [categoryId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -207,7 +206,7 @@ model Rundown {
   visibility RundownVisibility @default(PUBLIC)
 
   eventId Int   @map("event_id")
-  event   Event @relation(fields: [eventId], references: [id])
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   description String?   @db.Text
   actualStart DateTime? @map("actual_start")
@@ -226,7 +225,7 @@ model Organizer {
   name String
 
   userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   description String? @db.Text
   logo        String?
@@ -239,7 +238,6 @@ model Organizer {
   organizerMembers OrganizerMember[]
   eventOrganizers  EventOrganizer[]
 
-  // FIX: Added opposite relation for FollowOrganizer
   followers FollowOrganizer[]
 
   @@map("organizers")
@@ -251,7 +249,7 @@ model Role {
   name String
 
   organizerId Int       @map("organizer_id")
-  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
 
   description String? @db.Text
 
@@ -270,11 +268,11 @@ model OrganizerMember {
   uuid String @unique @default(uuid())
 
   organizerId Int       @map("organizer_id")
-  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   userId      Int       @map("user_id")
-  user        User      @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleId      Int       @map("role_id")
-  role        Role      @relation(fields: [roleId], references: [id])
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -288,9 +286,9 @@ model EventOrganizer {
   uuid String @unique @default(uuid())
 
   eventId     Int       @map("event_id")
-  event       Event     @relation(fields: [eventId], references: [id])
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   organizerId Int       @map("organizer_id")
-  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -306,9 +304,9 @@ model EventOrganizerDetail {
   uuid String @unique @default(uuid())
 
   eventOrganizerId Int            @map("event_organizer_id")
-  eventOrganizer   EventOrganizer @relation(fields: [eventOrganizerId], references: [id])
+  eventOrganizer   EventOrganizer @relation(fields: [eventOrganizerId], references: [id], onDelete: Cascade)
   roleId           Int            @map("role_id")
-  role             Role           @relation(fields: [roleId], references: [id])
+  role             Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -327,7 +325,7 @@ model TicketTier {
   endSale   DateTime @map("end_sale")
 
   eventId Int   @map("event_id")
-  event   Event @relation(fields: [eventId], references: [id])
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   description String? @db.Text
 
@@ -349,9 +347,9 @@ model Transaction {
   status        PaymentStatus @default(PENDING) @map("status")
 
   userId  Int   @map("user_id")
-  user    User  @relation(fields: [userId], references: [id])
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   eventId Int   @map("event_id")
-  event   Event @relation(fields: [eventId], references: [id])
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   paidAt DateTime? @map("paid_at")
 
@@ -371,11 +369,11 @@ model Ticket {
   status TicketStatus @default(UNUSED)
 
   transactionId Int         @map("transaction_id")
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   ticketTierId  Int         @map("ticket_tier_id")
-  ticketTier    TicketTier  @relation(fields: [ticketTierId], references: [id])
+  ticketTier    TicketTier  @relation(fields: [ticketTierId], references: [id], onDelete: Cascade)
   userId        Int         @map("user_id")
-  user          User        @relation(fields: [userId], references: [id])
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -389,9 +387,9 @@ model FollowUser {
   uuid String @unique @default(uuid())
 
   followingId Int  @map("following_id")
-  following   User @relation("Following", fields: [followingId], references: [id])
+  following   User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
   followerId  Int  @map("follower_id")
-  follower    User @relation("Follower", fields: [followerId], references: [id])
+  follower    User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -405,9 +403,9 @@ model FollowOrganizer {
   uuid String @unique @default(uuid())
 
   organizerId Int       @map("organizer_id")
-  organizer   Organizer @relation(fields: [organizerId], references: [id])
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   userId      Int       @map("user_id")
-  user        User      @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -421,9 +419,9 @@ model FavouriteEvent {
   uuid String @unique @default(uuid())
 
   eventId Int   @map("event_id")
-  event   Event @relation(fields: [eventId], references: [id])
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   userId  Int   @map("user_id")
-  user    User  @relation(fields: [userId], references: [id])
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")

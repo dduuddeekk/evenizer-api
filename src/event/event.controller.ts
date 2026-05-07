@@ -1,9 +1,9 @@
-import { Controller, Get, Req, UseGuards, HttpStatus, HttpException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Req, Body, UseGuards, HttpStatus, HttpException, Query, Param } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
-import { OptionalJwtAuthGuard } from '../common/guards';
-import { GetEventsQueryDto } from './dto';
+import { JwtAuthGuard, OptionalJwtAuthGuard } from '../common/guards';
+import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto } from './dto';
 
 @Controller('event')
 export class EventController {
@@ -22,6 +22,220 @@ export class EventController {
         HttpStatus.OK,
         'Events retrieved successfully',
         events,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async createEvent(
+    @Req() req: any,
+    @Body() dto: CreateEventDto,
+  ) {
+    try {
+      const event = await this.eventService.createEvent(req.user, dto);
+      return new APIResponse(
+        HttpStatus.CREATED,
+        'Event created successfully',
+        event,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async getEventDetail(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+  ) {
+    try {
+      const event = await this.eventService.getEventDetail(req.user, uuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Event retrieved successfully',
+        event,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':uuid/rundowns')
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async getEventRundowns(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+    @Query() query: GetRundownsQueryDto,
+  ) {
+    try {
+      const rundowns = await this.eventService.getEventRundowns(req.user, uuid, query);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Event rundowns retrieved successfully',
+        rundowns,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':eventUuid/rundowns/:rundownUuid')
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async getRundownDetail(
+    @Req() req: any,
+    @Param('eventUuid') eventUuid: string,
+    @Param('rundownUuid') rundownUuid: string,
+  ) {
+    try {
+      const rundown = await this.eventService.getRundownDetail(req.user, eventUuid, rundownUuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Rundown retrieved successfully',
+        rundown,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async updateEvent(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+    @Body() dto: UpdateEventDto,
+  ) {
+    try {
+      const event = await this.eventService.updateEvent(req.user, uuid, dto);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Event updated successfully',
+        event,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async deleteEvent(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+  ) {
+    try {
+      const result = await this.eventService.deleteEvent(req.user, uuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Event deleted successfully',
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':eventUuid/rundowns')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async createRundown(
+    @Req() req: any,
+    @Param('eventUuid') eventUuid: string,
+    @Body() dto: CreateRundownDto,
+  ) {
+    try {
+      const rundown = await this.eventService.createRundown(req.user, eventUuid, dto);
+      return new APIResponse(
+        HttpStatus.CREATED,
+        'Rundown created successfully',
+        rundown,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':eventUuid/rundowns/:rundownUuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async updateRundown(
+    @Req() req: any,
+    @Param('eventUuid') eventUuid: string,
+    @Param('rundownUuid') rundownUuid: string,
+    @Body() dto: UpdateRundownDto,
+  ) {
+    try {
+      const rundown = await this.eventService.updateRundown(req.user, eventUuid, rundownUuid, dto);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Rundown updated successfully',
+        rundown,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':eventUuid/rundowns/:rundownUuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async deleteRundown(
+    @Req() req: any,
+    @Param('eventUuid') eventUuid: string,
+    @Param('rundownUuid') rundownUuid: string,
+  ) {
+    try {
+      const result = await this.eventService.deleteRundown(req.user, eventUuid, rundownUuid);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Rundown deleted successfully',
+        result,
       );
     } catch (error: any) {
       if (error instanceof HttpException) throw error;

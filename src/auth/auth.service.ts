@@ -13,88 +13,94 @@ export class AuthService {
   ) { }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: dto.identifier },
-          { username: dto.identifier }
-        ]
-      },
-    });
-
-    if (!user) {
-      throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
-    }
-
-    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
-      throw new HttpException('Account is banned or deleted', HttpStatus.UNAUTHORIZED);
-    }
-
-    const isPasswordValid = await argon.verify(user.password, dto.password);
-    if (!isPasswordValid) {
-      throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
-    }
-
-    const isMobile = dto.device === DeviceType.MOBILE;
-    const payload = { sub: user.uuid };
-
-    if (isMobile) {
-      // Mobile: 1 Token (Access Token), 1 Year
-      const expiresInSeconds = 365 * 24 * 60 * 60;
-      const accessToken = this.jwtService.sign(payload, { expiresIn: expiresInSeconds });
-
-      await this.prisma.token.create({
-        data: {
-          token: accessToken,
-          type: TokenType.ACCESS,
-          expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
-          userId: user.id,
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findFirst({
+        where: {
+          OR: [
+            { email: dto.identifier },
+            { username: dto.identifier }
+          ]
         },
       });
 
-      const { password, id, ...userWithoutPasswordAndId } = user;
-      return { user: userWithoutPasswordAndId, accessToken };
-    } else {
-      // Web: Access Token (short) + Refresh Token (long)
-      const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
-      const jwtExpiresDay = parseInt(process.env.JWT_EXPIRES_DAY || '30');
+      if (!user) {
+        throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+      }
 
-      const accessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresSecond });
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresDay * 24 * 60 * 60 });
+      if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+        throw new HttpException('Account is banned or deleted', HttpStatus.UNAUTHORIZED);
+      }
 
-      // Save Tokens in a transaction
-      await this.prisma.$transaction([
-        this.prisma.token.create({
+      const isPasswordValid = await argon.verify(user.password, dto.password);
+      if (!isPasswordValid) {
+        throw new HttpException('Invalid email or password', HttpStatus.UNAUTHORIZED);
+      }
+
+      const isMobile = dto.device === DeviceType.MOBILE;
+      const payload = { sub: user.uuid };
+
+      if (isMobile) {
+        // Mobile: 1 Token (Access Token), 1 Year
+        const expiresInSeconds = 365 * 24 * 60 * 60;
+        const accessToken = this.jwtService.sign(payload, { expiresIn: expiresInSeconds });
+
+        await tx.token.create({
+          data: {
+            token: accessToken,
+            type: TokenType.ACCESS,
+            expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
+            userId: user.id,
+          },
+        });
+
+        const { password, id, ...userWithoutPasswordAndId } = user;
+        return { user: userWithoutPasswordAndId, accessToken };
+      } else {
+        // Web: Access Token (short) + Refresh Token (long)
+        const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
+        const jwtExpiresDay = parseInt(process.env.JWT_EXPIRES_DAY || '30');
+
+        const accessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresSecond });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresDay * 24 * 60 * 60 });
+
+        await tx.token.create({
           data: {
             token: accessToken,
             type: TokenType.ACCESS,
             expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
             userId: user.id,
           },
-        }),
-        this.prisma.token.create({
+        });
+
+        await tx.token.create({
           data: {
             token: refreshToken,
             type: TokenType.REFRESH,
             expiresAt: new Date(Date.now() + jwtExpiresDay * 24 * 60 * 60 * 1000),
             userId: user.id,
           },
-        }),
-      ]);
+        });
 
-      const { password, id, ...userWithoutPasswordAndId } = user;
-      return { user: userWithoutPasswordAndId, accessToken, refreshToken };
-    }
+        const { password, id, ...userWithoutPasswordAndId } = user;
+        return { user: userWithoutPasswordAndId, accessToken, refreshToken };
+      }
+    });
+
+    return result;
   }
 
   async logout(token: string) {
     // Perform an atomic soft-delete update if the token exists and isn't deleted
-    await this.prisma.token.updateMany({
-      where: { token, deletedAt: null },
-      data: { deletedAt: new Date() },
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.token.updateMany({
+        where: { token, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+
+      return { message: 'Logged out successfully' };
     });
 
-    return { message: 'Logged out successfully' };
+    return result;
   }
 
   async refresh(dto: RefreshTokenDto) {

@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventStatus, UserRole } from '@prisma/client';
-import { GetEventsQueryDto } from './dto';
+import { EventStatus, UserRole, RundownVisibility } from '@prisma/client';
+import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto } from './dto';
 
 @Injectable()
 export class EventService {
@@ -9,7 +9,7 @@ export class EventService {
 
   async getAllEvents(user: any, query: GetEventsQueryDto) {
     try {
-      const { search, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
+      const { search, category, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
       const page = Number(query.page) || 1;
       const limit = Number(query.limit) || 10;
       let whereClause: any = {};
@@ -26,7 +26,22 @@ export class EventService {
               },
             },
             // If logged in, can also see their own events regardless of status or visibility
-            ...(user ? [{ userId: user.id }] : []),
+            ...(user ? [
+              { userId: user.id },
+              {
+                eventOrganizers: {
+                  some: {
+                    organizer: {
+                      organizerMembers: {
+                        some: {
+                          userId: user.id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ] : []),
           ],
         };
       }
@@ -39,6 +54,22 @@ export class EventService {
 
       if (search) {
         andConditions.push({ title: { contains: search } });
+      }
+
+      if (category) {
+        andConditions.push({
+          categories: {
+            some: {
+              categoryDetails: {
+                some: {
+                  name: {
+                    equals: category
+                  }
+                }
+              }
+            }
+          }
+        });
       }
       
       if (status) {
@@ -53,22 +84,26 @@ export class EventService {
 
       // If groupBy is requested, return grouped stats instead of paginated events
       if (groupBy) {
-        const groupedEvents = await this.prisma.event.groupBy({
-          by: [groupBy as any],
-          where: finalWhere,
-          _count: {
-            id: true,
-          },
-        });
-        
-        if (!groupedEvents || groupedEvents.length === 0) {
-          throw new HttpException('No events found', HttpStatus.NOT_FOUND);
-        }
+        const result = await this.prisma.$transaction(async (tx) => {
+          const groupedEvents = await tx.event.groupBy({
+            by: [groupBy as any],
+            where: finalWhere,
+            _count: {
+              id: true,
+            },
+          });
+          
+          if (!groupedEvents || groupedEvents.length === 0) {
+            throw new HttpException('No events found', HttpStatus.NOT_FOUND);
+          }
 
-        return {
-          data: groupedEvents,
-          meta: { groupBy }
-        };
+          return {
+            data: groupedEvents,
+            meta: { groupBy }
+          };
+        });
+
+        return result;
       }
 
       // Normal paginated response
@@ -87,7 +122,7 @@ export class EventService {
         };
       }
 
-      const [total, events] = await Promise.all([
+      const result = await this.prisma.$transaction([
         this.prisma.event.count({ where: finalWhere }),
         this.prisma.event.findMany({
           where: finalWhere,
@@ -97,7 +132,6 @@ export class EventService {
                 categoryDetails: true
               }
             },
-            rundowns: true,
             ticketTiers: true,
             _count: {
               select: { favouritedBy: true }
@@ -109,11 +143,13 @@ export class EventService {
         })
       ]);
 
+      const [total, events] = result;
+
       if (!events || events.length === 0) {
         throw new HttpException('No events found', HttpStatus.NOT_FOUND);
       }
 
-      return {
+      const paginatedResult = {
         data: events,
         meta: {
           total,
@@ -122,6 +158,8 @@ export class EventService {
           totalPages: Math.ceil(total / limit),
         }
       };
+
+      return paginatedResult;
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
@@ -129,5 +167,580 @@ export class EventService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  async createEvent(user: any, dto: CreateEventDto) {
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const { title, start, end, status, isPublic, banner, description, categories } = dto;
+
+        // Construct category nested creation logic if categories are provided
+        let categoriesData: any = undefined;
+        if (categories && categories.length > 0) {
+          categoriesData = {
+            create: categories.map(tag => ({
+              categoryDetails: {
+                create: {
+                  name: tag
+                }
+              }
+            }))
+          };
+        }
+
+        const event = await tx.event.create({
+          data: {
+            title,
+            start,
+            end,
+            status: status || EventStatus.DRAFT,
+            isPublic: isPublic || false,
+            banner,
+            description,
+            userId: user.id, // Linked to the authenticated user
+            categories: categoriesData
+          },
+          include: {
+            categories: {
+              include: {
+                categoryDetails: true
+              }
+            }
+          }
+        });
+
+        return event;
+      });
+
+      return result;
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message || 'Failed to create event',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  async getEventDetail(user: any, uuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      let whereClause: any = { uuid };
+
+      if (!user || user.role !== UserRole.ADMIN) {
+        whereClause = {
+          uuid,
+          OR: [
+            {
+              isPublic: true,
+              status: {
+                not: EventStatus.DRAFT,
+              },
+            },
+            ...(user ? [
+              { userId: user.id },
+              {
+                eventOrganizers: {
+                  some: {
+                    organizer: {
+                      organizerMembers: {
+                        some: {
+                          userId: user.id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ] : []),
+          ],
+        };
+      }
+
+      const event = await tx.event.findFirst({
+        where: whereClause,
+        include: {
+          categories: {
+            include: {
+              categoryDetails: true
+            }
+          },
+          ticketTiers: true,
+          eventOrganizers: {
+            include: {
+              organizer: true
+            }
+          },
+          _count: {
+            select: {
+              favouritedBy: true,
+              rundowns: true,
+            }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+      }
+
+      return event;
+    });
+
+    return result;
+  }
+
+  async getEventRundowns(user: any, eventUuid: string, query: GetRundownsQueryDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Verify Event Existence and Accessibility
+      let eventWhereClause: any = { uuid: eventUuid };
+      let isAdminOrAffiliated = false;
+
+      if (!user || user.role !== UserRole.ADMIN) {
+        eventWhereClause = {
+          uuid: eventUuid,
+          OR: [
+            {
+              isPublic: true,
+              status: { not: EventStatus.DRAFT },
+            },
+            ...(user ? [
+              { userId: user.id },
+              {
+                eventOrganizers: {
+                  some: {
+                    organizer: {
+                      organizerMembers: {
+                        some: { userId: user.id }
+                      }
+                    }
+                  }
+                }
+              }
+            ] : []),
+          ],
+        };
+      } else {
+        isAdminOrAffiliated = true; // Admin has full access
+      }
+
+      const event = await tx.event.findFirst({
+        where: eventWhereClause,
+        include: {
+          eventOrganizers: {
+            include: {
+              organizer: {
+                include: {
+                  organizerMembers: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+      }
+
+      // Check if user is owner or affiliated to determine rundown visibility limits
+      if (user && user.role !== UserRole.ADMIN) {
+        if (event.userId === user.id) {
+          isAdminOrAffiliated = true;
+        } else {
+          // Check affiliation
+          const isAffiliated = event.eventOrganizers.some(eo => 
+            eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          );
+          if (isAffiliated) isAdminOrAffiliated = true;
+        }
+      }
+
+      // 2. Fetch Rundowns
+      const { search, status, visibility, sortBy = 'start', sortOrder = 'asc', groupBy } = query;
+      const page = Number(query.page) || 1;
+      const limit = Number(query.limit) || 10;
+      
+      const andConditions: any[] = [{ eventId: event.id }];
+
+      // Filter by visibility rule: non-affiliated users only see PUBLIC
+      if (!isAdminOrAffiliated) {
+        andConditions.push({ visibility: RundownVisibility.PUBLIC });
+      } else if (visibility) {
+        andConditions.push({ visibility });
+      }
+
+      if (search) {
+        andConditions.push({ title: { contains: search } });
+      }
+
+      if (status) {
+        andConditions.push({ status });
+      }
+
+      const finalWhere = { AND: andConditions };
+
+      if (groupBy) {
+        const groupedRundowns = await tx.rundown.groupBy({
+          by: [groupBy as any],
+          where: finalWhere,
+          _count: {
+            id: true,
+          },
+        });
+        
+        if (!groupedRundowns || groupedRundowns.length === 0) {
+          throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
+        }
+
+        return {
+          data: groupedRundowns,
+          meta: { groupBy }
+        };
+      }
+
+      const skip = (page - 1) * limit;
+
+      const [total, rundowns] = await Promise.all([
+        tx.rundown.count({ where: finalWhere }),
+        tx.rundown.findMany({
+          where: finalWhere,
+          orderBy: { [sortBy]: sortOrder },
+          skip,
+          take: limit,
+        })
+      ]);
+
+      if (!rundowns || rundowns.length === 0) {
+        throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        data: rundowns,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        }
+      };
+    });
+
+    return result;
+  }
+
+  async getRundownDetail(user: any, eventUuid: string, rundownUuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Verify Event Accessibility
+      let eventWhereClause: any = { uuid: eventUuid };
+      let isAdminOrAffiliated = false;
+
+      if (!user || user.role !== UserRole.ADMIN) {
+        eventWhereClause = {
+          uuid: eventUuid,
+          OR: [
+            {
+              isPublic: true,
+              status: { not: EventStatus.DRAFT },
+            },
+            ...(user ? [
+              { userId: user.id },
+              {
+                eventOrganizers: {
+                  some: {
+                    organizer: {
+                      organizerMembers: {
+                        some: { userId: user.id }
+                      }
+                    }
+                  }
+                }
+              }
+            ] : []),
+          ],
+        };
+      } else {
+        isAdminOrAffiliated = true;
+      }
+
+      const event = await tx.event.findFirst({
+        where: eventWhereClause,
+        include: {
+          eventOrganizers: {
+            include: {
+              organizer: {
+                include: { organizerMembers: true }
+              }
+            }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+      }
+
+      // 2. Check affiliation
+      if (user && user.role !== UserRole.ADMIN) {
+        if (event.userId === user.id) {
+          isAdminOrAffiliated = true;
+        } else {
+          const isAffiliated = event.eventOrganizers.some(eo => 
+            eo.organizer.organizerMembers.some(om => om.userId === user.id)
+          );
+          if (isAffiliated) isAdminOrAffiliated = true;
+        }
+      }
+
+      // 3. Fetch Rundown and apply visibility constraint
+      const rundownWhere: any = { 
+        uuid: rundownUuid,
+        eventId: event.id 
+      };
+
+      if (!isAdminOrAffiliated) {
+        rundownWhere.visibility = RundownVisibility.PUBLIC;
+      }
+
+      const rundown = await tx.rundown.findFirst({
+        where: rundownWhere
+      });
+
+      if (!rundown) {
+        throw new HttpException('Rundown not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+      }
+
+      return rundown;
+    });
+
+    return result;
+  }
+
+  async updateEvent(user: any, uuid: string, dto: UpdateEventDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || event.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isAffiliated = event.eventOrganizers.some(eo => 
+          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+        );
+        if (isAffiliated) hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+      }
+
+      const { categories, organizerUuids, ...scalarData } = dto;
+
+      // Update scalar fields
+      let dataToUpdate: any = { ...scalarData };
+
+      // Update categories if provided
+      if (categories) {
+        // Delete old categories
+        await tx.category.deleteMany({ where: { eventId: event.id } });
+        
+        if (categories.length > 0) {
+          dataToUpdate.categories = {
+            create: categories.map(tag => ({
+              categoryDetails: { create: { name: tag } }
+            }))
+          };
+        }
+      }
+
+      // Update event organizers if provided
+      if (organizerUuids) {
+        await tx.eventOrganizer.deleteMany({ where: { eventId: event.id } });
+        
+        if (organizerUuids.length > 0) {
+          const organizers = await tx.organizer.findMany({
+            where: { uuid: { in: organizerUuids } }
+          });
+          
+          if (organizers.length > 0) {
+            dataToUpdate.eventOrganizers = {
+              create: organizers.map(org => ({
+                organizerId: org.id
+              }))
+            };
+          }
+        }
+      }
+
+      const updatedEvent = await tx.event.update({
+        where: { id: event.id },
+        data: dataToUpdate,
+        include: {
+          categories: { include: { categoryDetails: true } },
+          eventOrganizers: { include: { organizer: true } }
+        }
+      });
+
+      return updatedEvent;
+    });
+
+    return result;
+  }
+
+  async deleteEvent(user: any, uuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid, deletedAt: null },
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Strictly Owner or Admin only for deletion
+      if (user.role !== UserRole.ADMIN && event.userId !== user.id) {
+        throw new HttpException('Only Event Owner or Admin can delete the event', HttpStatus.FORBIDDEN);
+      }
+
+      await tx.event.update({
+        where: { id: event.id },
+        data: { deletedAt: new Date() },
+      });
+
+      return { message: 'Event deleted successfully' };
+    });
+
+    return result;
+  }
+
+  async createRundown(user: any, eventUuid: string, dto: CreateRundownDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || event.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isAffiliated = event.eventOrganizers.some(eo => 
+          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+        );
+        if (isAffiliated) hasPermission = true;
+      }
+
+      if (!hasPermission) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+
+      const rundown = await tx.rundown.create({
+        data: {
+          ...dto,
+          eventId: event.id
+        }
+      });
+
+      return rundown;
+    });
+
+    return result;
+  }
+
+  async updateRundown(user: any, eventUuid: string, rundownUuid: string, dto: UpdateRundownDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || event.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isAffiliated = event.eventOrganizers.some(eo => 
+          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+        );
+        if (isAffiliated) hasPermission = true;
+      }
+
+      if (!hasPermission) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+
+      const rundown = await tx.rundown.findFirst({
+        where: { uuid: rundownUuid, eventId: event.id, deletedAt: null }
+      });
+
+      if (!rundown) throw new HttpException('Rundown not found', HttpStatus.NOT_FOUND);
+
+      const updatedRundown = await tx.rundown.update({
+        where: { id: rundown.id },
+        data: dto
+      });
+
+      return updatedRundown;
+    });
+
+    return result;
+  }
+
+  async deleteRundown(user: any, eventUuid: string, rundownUuid: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || event.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isAffiliated = event.eventOrganizers.some(eo => 
+          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+        );
+        if (isAffiliated) hasPermission = true;
+      }
+
+      if (!hasPermission) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+
+      const rundown = await tx.rundown.findFirst({
+        where: { uuid: rundownUuid, eventId: event.id, deletedAt: null }
+      });
+
+      if (!rundown) throw new HttpException('Rundown not found', HttpStatus.NOT_FOUND);
+
+      await tx.rundown.update({
+        where: { id: rundown.id },
+        data: { deletedAt: new Date() }
+      });
+
+      return { message: 'Rundown deleted successfully' };
+    });
+
+    return result;
   }
 }

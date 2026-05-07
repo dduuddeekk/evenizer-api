@@ -56,13 +56,17 @@ export class UserService {
     delete dataToUpdate.password;
 
     try {
-      const updatedUser = await this.prisma.user.update({
-        where: { uuid },
-        data: dataToUpdate,
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { uuid },
+          data: dataToUpdate,
+        });
+
+        const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+        return userWithoutPasswordAndId;
       });
 
-      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
-      return userWithoutPasswordAndId;
+      return result;
     } catch (error) {
       throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
@@ -77,13 +81,17 @@ export class UserService {
     delete dataToUpdate.password;
 
     try {
-      const updatedUser = await this.prisma.user.update({
-        where: { uuid },
-        data: dataToUpdate,
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { uuid },
+          data: dataToUpdate,
+        });
+
+        const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+        return userWithoutPasswordAndId;
       });
 
-      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
-      return userWithoutPasswordAndId;
+      return result;
     } catch (error) {
       throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
@@ -91,13 +99,17 @@ export class UserService {
 
   async updateProfileImage(uuid: string, imageUrl: string) {
     try {
-      const updatedUser = await this.prisma.user.update({
-        where: { uuid },
-        data: { profile: imageUrl },
+      const result = await this.prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { uuid },
+          data: { profile: imageUrl },
+        });
+
+        const { password, id, ...userWithoutPasswordAndId } = updatedUser;
+        return userWithoutPasswordAndId;
       });
 
-      const { password, id, ...userWithoutPasswordAndId } = updatedUser;
-      return userWithoutPasswordAndId;
+      return result;
     } catch (error) {
       throw new HttpException('Failed to update profile image', HttpStatus.BAD_REQUEST);
     }
@@ -114,35 +126,43 @@ export class UserService {
     }
     // If ADMIN, no where clause, gets all
 
-    const allUsers = await this.prisma.user.findMany({ where: whereClause });
-    return allUsers.map(({ password, id, ...rest }) => rest);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const allUsers = await tx.user.findMany({ where: whereClause });
+      return allUsers.map(({ password, id, ...rest }) => rest);
+    });
+
+    return result;
   }
 
   async getOneUser(uuid: string, currentUser: any) {
-    const user = await this.prisma.user.findUnique({
-      where: { uuid },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { uuid },
+      });
+
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      const isOwner = currentUser.uuid === user.uuid;
+      const isAdmin = currentUser.role === UserRole.ADMIN;
+
+      // Check visibility
+      if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+        if (!isAdmin) {
+          throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+      } else if (user.status === UserStatus.INACTIVE) {
+        if (!isAdmin && !isOwner) {
+          throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+      }
+
+      const { password, id, ...userWithoutPasswordAndId } = user;
+      return userWithoutPasswordAndId;
     });
 
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
-
-    const isOwner = currentUser.uuid === user.uuid;
-    const isAdmin = currentUser.role === UserRole.ADMIN;
-
-    // Check visibility
-    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
-      if (!isAdmin) {
-        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-      }
-    } else if (user.status === UserStatus.INACTIVE) {
-      if (!isAdmin && !isOwner) {
-        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-      }
-    }
-
-    const { password, id, ...userWithoutPasswordAndId } = user;
-    return userWithoutPasswordAndId;
+    return result;
   }
 
   async deleteUser(uuid: string, currentUser: any) {
@@ -173,4 +193,3 @@ export class UserService {
     return result;
   }
 }
-
