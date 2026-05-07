@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Req, Body, UseGuards, HttpStatus, HttpException, Query, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { JwtAuthGuard, OptionalJwtAuthGuard } from '../common/guards';
@@ -60,14 +60,12 @@ export class EventController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('banner'))
   async createEvent(
     @Req() req: any,
     @Body() dto: CreateEventDto,
-    @UploadedFile() bannerFile?: Express.Multer.File,
   ) {
     try {
-      const event = await this.eventService.createEvent(req.user, dto, bannerFile);
+      const event = await this.eventService.createEvent(req.user, dto);
       return new APIResponse(
         HttpStatus.CREATED,
         'Event created successfully',
@@ -156,18 +154,53 @@ export class EventController {
   @Patch(':uuid')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('banner'))
   async updateEvent(
     @Req() req: any,
     @Param('uuid') uuid: string,
     @Body() dto: UpdateEventDto,
-    @UploadedFile() bannerFile?: Express.Multer.File,
   ) {
     try {
-      const event = await this.eventService.updateEvent(req.user, uuid, dto, bannerFile);
+      const event = await this.eventService.updateEvent(req.user, uuid, dto);
       return new APIResponse(
         HttpStatus.OK,
         'Event updated successfully',
+        event,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':uuid/banner')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadBanner(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    try {
+      const event = await this.eventService.uploadBanner(req.user, uuid, file);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Event banner updated successfully',
         event,
       );
     } catch (error: any) {

@@ -293,7 +293,7 @@ export class EventService {
     return result;
   }
 
-  async createEvent(user: any, dto: CreateEventDto, bannerFile?: Express.Multer.File) {
+  async createEvent(user: any, dto: CreateEventDto) {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const { title, start, end, status, isPublic, banner, description, categories } = dto;
@@ -332,21 +332,6 @@ export class EventService {
             }
           }
         });
-
-        if (bannerFile) {
-          const bannerUrl = await this.uploadService.saveImage(bannerFile, 'banner', event.uuid);
-          event = await tx.event.update({
-            where: { id: event.id },
-            data: { banner: bannerUrl },
-            include: {
-              categories: {
-                include: {
-                  categoryDetails: true
-                }
-              }
-            }
-          });
-        }
 
         return event;
       });
@@ -653,7 +638,7 @@ export class EventService {
     return result;
   }
 
-  async updateEvent(user: any, uuid: string, dto: UpdateEventDto, bannerFile?: Express.Multer.File) {
+  async updateEvent(user: any, uuid: string, dto: UpdateEventDto) {
     const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
@@ -686,10 +671,6 @@ export class EventService {
 
       // Update scalar fields
       let dataToUpdate: any = { ...scalarData };
-
-      if (bannerFile) {
-        dataToUpdate.banner = await this.uploadService.saveImage(bannerFile, 'banner', event.uuid);
-      }
 
       // Update categories if provided
       if (categories) {
@@ -731,6 +712,48 @@ export class EventService {
           categories: { include: { categoryDetails: true } },
           eventOrganizers: { include: { organizer: true } }
         }
+      });
+
+      return updatedEvent;
+    });
+
+    return result;
+  }
+
+  async uploadBanner(user: any, uuid: string, file: Express.Multer.File) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.findFirst({
+        where: { uuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      let hasPermission = false;
+      if (user.role === UserRole.ADMIN || event.userId === user.id) {
+        hasPermission = true;
+      } else {
+        const isAffiliated = event.eventOrganizers.some(eo => 
+          eo.organizer.organizerMembers.some(om => om.userId === user.id)
+        );
+        if (isAffiliated) hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+      }
+
+      const bannerUrl = await this.uploadService.saveImage(file, 'banner', event.uuid);
+
+      const updatedEvent = await tx.event.update({
+        where: { id: event.id },
+        data: { banner: bannerUrl },
       });
 
       return updatedEvent;
