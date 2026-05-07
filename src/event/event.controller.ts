@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { JwtAuthGuard, OptionalJwtAuthGuard } from '../common/guards';
-import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto } from './dto';
+import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 
 @Controller('event')
 export class EventController {
@@ -343,6 +343,30 @@ export class EventController {
       return new APIResponse(
         HttpStatus.OK,
         result.message,
+        result,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':uuid/organizers')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async addOrganizerToEvent(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+    @Body() dto: AddOrganizerToEventDto,
+  ) {
+    try {
+      const result = await this.eventService.addOrganizerToEvent(req.user, uuid, dto);
+      return new APIResponse(
+        HttpStatus.CREATED,
+        'Organizer invited to event successfully',
         result,
       );
     } catch (error: any) {

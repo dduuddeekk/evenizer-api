@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventStatus, UserRole, RundownVisibility } from '@prisma/client';
-import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto } from './dto';
+import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus } from '@prisma/client';
+import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 import { UploadService } from '../upload/upload.service';
 
 @Injectable()
@@ -980,6 +980,96 @@ export class EventService {
       });
 
       return { message: 'Event removed from favourites' };
+    });
+
+    return result;
+  }
+
+  async addOrganizerToEvent(user: any, eventUuid: string, dto: AddOrganizerToEventDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Check event exists
+      const event = await tx.event.findFirst({
+        where: { uuid: eventUuid, deletedAt: null },
+        include: {
+          eventOrganizers: {
+            include: { organizer: { include: { organizerMembers: true } } }
+          }
+        }
+      });
+
+      if (!event) {
+        throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
+      }
+
+      // 2. Only Event Owner or Admin can invite organizers
+      if (user.role !== UserRole.ADMIN && event.userId !== user.id) {
+        throw new HttpException('Only Event Owner or Admin can invite organizers', HttpStatus.FORBIDDEN);
+      }
+
+      // 3. Find the organizer
+      const organizer = await tx.organizer.findFirst({
+        where: { uuid: dto.organizerUuid, deletedAt: null }
+      });
+
+      if (!organizer) {
+        throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+      }
+
+      // 4. Check if EventOrganizer already exists (any status)
+      const existing = await tx.eventOrganizer.findFirst({
+        where: { eventId: event.id, organizerId: organizer.id, deletedAt: null }
+      });
+
+      if (existing) {
+        throw new HttpException(
+          `Organizer is already ${existing.status.toLowerCase()} for this event`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // 5. Create EventOrganizer with PENDING status
+      const eventOrganizer = await tx.eventOrganizer.create({
+        data: {
+          eventId: event.id,
+          organizerId: organizer.id,
+          status: EventOrganizerStatus.PENDING,
+        }
+      });
+
+      // 6. If roleUuids provided, create EventOrganizerDetails
+      if (dto.roleUuids && dto.roleUuids.length > 0) {
+        const roles = await tx.role.findMany({
+          where: {
+            uuid: { in: dto.roleUuids },
+            organizerId: organizer.id,
+            deletedAt: null,
+          }
+        });
+
+        if (roles.length !== dto.roleUuids.length) {
+          throw new HttpException(
+            'One or more roles not found or do not belong to this organizer',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+
+        await tx.eventOrganizerDetail.createMany({
+          data: roles.map(role => ({
+            eventOrganizerId: eventOrganizer.id,
+            roleId: role.id,
+          }))
+        });
+      }
+
+      const fullEventOrganizer = await tx.eventOrganizer.findUnique({
+        where: { id: eventOrganizer.id },
+        include: {
+          organizer: true,
+          eventOrganizerDetails: { include: { role: true } }
+        }
+      });
+
+      return fullEventOrganizer;
     });
 
     return result;

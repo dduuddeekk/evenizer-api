@@ -1,7 +1,7 @@
-import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsDate, IsArray } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsDate, IsArray, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { z } from 'zod';
-import { EventStatus, RundownStatus, RundownVisibility } from '@prisma/client';
+import { EventStatus, RundownStatus, RundownVisibility, EventOrganizerStatus } from '@prisma/client';
 
 export enum SortOrder {
   ASC = 'asc',
@@ -285,4 +285,15 @@ export class UpdateRundownDto {
   @IsOptional()
   @IsString()
   description?: string;
+}
+
+export class AddOrganizerToEventDto {
+  @IsNotEmpty()
+  @IsString()
+  organizerUuid: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roleUuids?: string[];
 }

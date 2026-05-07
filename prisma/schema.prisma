@@ -57,6 +57,18 @@ enum RundownVisibility {
   RESTRICTED
 }
 
+enum OrganizerStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum EventOrganizerStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum PaymentMethod {
   CREDIT_CARD
   DEBIT_CARD
@@ -220,9 +232,12 @@ model Rundown {
 }
 
 model Organizer {
-  id   Int    @id @default(autoincrement())
-  uuid String @unique @default(uuid())
-  name String
+  id         Int             @id @default(autoincrement())
+  uuid       String          @unique @default(uuid())
+  name       String
+  status     OrganizerStatus @default(ACTIVE)
+  isVerified Boolean         @default(false) @map("is_verified")
+  isPublic   Boolean         @default(true) @map("is_public")
 
   userId Int  @map("user_id")
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -289,6 +304,9 @@ model EventOrganizer {
   event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   organizerId Int       @map("organizer_id")
   organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  status       EventOrganizerStatus @default(PENDING)
+  rejectReason String?              @map("reject_reason") @db.Text
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
