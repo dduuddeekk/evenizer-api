@@ -62,25 +62,25 @@ export class AuthService {
       const accessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresSecond });
       const refreshToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresDay * 24 * 60 * 60 });
 
-      // Save Access Token
-      await this.prisma.token.create({
-        data: {
-          token: accessToken,
-          type: TokenType.ACCESS,
-          expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
-          userId: user.id,
-        },
-      });
-
-      // Save Refresh Token
-      await this.prisma.token.create({
-        data: {
-          token: refreshToken,
-          type: TokenType.REFRESH,
-          expiresAt: new Date(Date.now() + jwtExpiresDay * 24 * 60 * 60 * 1000),
-          userId: user.id,
-        },
-      });
+      // Save Tokens in a transaction
+      await this.prisma.$transaction([
+        this.prisma.token.create({
+          data: {
+            token: accessToken,
+            type: TokenType.ACCESS,
+            expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
+            userId: user.id,
+          },
+        }),
+        this.prisma.token.create({
+          data: {
+            token: refreshToken,
+            type: TokenType.REFRESH,
+            expiresAt: new Date(Date.now() + jwtExpiresDay * 24 * 60 * 60 * 1000),
+            userId: user.id,
+          },
+        }),
+      ]);
 
       const { password, id, ...userWithoutPasswordAndId } = user;
       return { user: userWithoutPasswordAndId, accessToken, refreshToken };
@@ -88,68 +88,66 @@ export class AuthService {
   }
 
   async logout(token: string) {
-    const existingToken = await this.prisma.token.findFirst({
+    // Perform an atomic soft-delete update if the token exists and isn't deleted
+    await this.prisma.token.updateMany({
       where: { token, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
-
-    if (existingToken) {
-      // Soft Delete
-      await this.prisma.token.update({
-        where: { id: existingToken.id },
-        data: { deletedAt: new Date() }
-      });
-    }
 
     return { message: 'Logged out successfully' };
   }
 
   async refresh(dto: RefreshTokenDto) {
-    // 1. Verify if refresh token is in DB and active
-    const existingToken = await this.prisma.token.findFirst({
-      where: {
-        token: dto.refreshToken,
-        type: TokenType.REFRESH,
-        deletedAt: null
-      },
-    });
-
-    if (!existingToken) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    if (new Date() > existingToken.expiresAt) {
-      throw new UnauthorizedException('Refresh token expired');
-    }
-
-    // 2. Verify JWT signature
+    // 1. Verify JWT signature first before querying DB
     try {
       this.jwtService.verify(dto.refreshToken);
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token signature');
     }
 
-    // 3. Generate new Access Token
-    const user = await this.prisma.user.findUnique({ where: { id: existingToken.userId } });
-    if (!user) throw new UnauthorizedException('User not found');
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 2. Verify if refresh token is in DB and active
+      const existingToken = await tx.token.findFirst({
+        where: {
+          token: dto.refreshToken,
+          type: TokenType.REFRESH,
+          deletedAt: null
+        },
+      });
 
-    if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
-      throw new UnauthorizedException('Account is banned or deleted');
-    }
+      if (!existingToken) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
-    const payload = { sub: user.uuid };
-    const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
-    const newAccessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresSecond });
+      if (new Date() > existingToken.expiresAt) {
+        throw new UnauthorizedException('Refresh token expired');
+      }
 
-    // 4. Save new access token to DB
-    await this.prisma.token.create({
-      data: {
-        token: newAccessToken,
-        type: TokenType.ACCESS,
-        expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
-        userId: user.id,
-      },
+      // 3. Generate new Access Token
+      const user = await tx.user.findUnique({ where: { id: existingToken.userId } });
+      if (!user) throw new UnauthorizedException('User not found');
+
+      if (user.deletedAt !== null || user.status === UserStatus.BANNED) {
+        throw new UnauthorizedException('Account is banned or deleted');
+      }
+
+      const payload = { sub: user.uuid };
+      const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
+      const newAccessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresSecond });
+
+      // 4. Save new access token to DB
+      await tx.token.create({
+        data: {
+          token: newAccessToken,
+          type: TokenType.ACCESS,
+          expiresAt: new Date(Date.now() + jwtExpiresSecond * 1000),
+          userId: user.id,
+        },
+      });
+
+      return { accessToken: newAccessToken };
     });
 
-    return { accessToken: newAccessToken };
+    return result;
   }
 }

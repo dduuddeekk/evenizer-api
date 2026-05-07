@@ -78,7 +78,6 @@ export class UpdateUserDto {
 
 export const UpdateUserAdminSchema = UpdateUserSchema.extend({
   email: z.string().email().optional(),
-  role: z.nativeEnum(UserRole).optional(),
   isVerified: z.boolean().optional(),
 });
 
@@ -86,10 +85,6 @@ export class UpdateUserAdminDto extends UpdateUserDto {
   @IsOptional()
   @IsEmail()
   email?: string;
-
-  @IsOptional()
-  @IsEnum(UserRole)
-  role?: UserRole;
 
   @IsOptional()
   @IsBoolean()

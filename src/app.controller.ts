@@ -12,7 +12,15 @@ export class AppController {
 
   @Get()
   getHello(): APIResponse<{ value: string; version: string }> {
-    return this.appService.getHello();
+    try {
+      return this.appService.getHello();
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('health')
@@ -22,9 +30,10 @@ export class AppController {
       await this.prisma.$queryRaw`SELECT 1`;
 
       return new APIResponse<string>(HttpStatus.OK, 'Server is healthy', 'Database connection OK');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
-        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Health check failed', error.message),
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Health check failed', error?.message || error),
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

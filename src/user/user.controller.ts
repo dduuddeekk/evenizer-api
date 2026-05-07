@@ -1,10 +1,13 @@
-import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UserRole } from '@prisma/client';
 import { UserService } from './user.service';
 import { UploadService } from '../upload/upload.service';
-import { RegisterDto, UpdateUserAdminDto } from './dto';
-import { APIResponse } from '../common/dto';
-import { JwtAuthGuard } from '../common/guards';
+import { RegisterDto, UpdateUserDto, UpdateUserAdminDto } from './dto';
+import { APIResponse, ErrorResponse } from '../common/dto';
+import { JwtAuthGuard, RolesGuard } from '../common/guards';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('user')
 export class UserController {
@@ -15,84 +18,186 @@ export class UserController {
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    const user = await this.userService.register(dto);
-    return new APIResponse(
-      HttpStatus.CREATED,
-      'User registered successfully',
-      user,
-    );
+    try {
+      const user = await this.userService.register(dto);
+      return new APIResponse(
+        HttpStatus.CREATED,
+        'User registered successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch('me')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async updateMyUser(
+    @Body() dto: UpdateUserDto,
+    @Req() req: any,
+  ) {
+    try {
+      const user = await this.userService.updateMyUser(req.user.uuid, dto);
+      return new APIResponse(
+        HttpStatus.OK,
+        'User updated successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Patch(':uuid')
-  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   async updateUser(
     @Param('uuid') uuid: string,
     @Body() dto: UpdateUserAdminDto,
-    @Req() req: any,
   ) {
-    const user = await this.userService.updateUser(uuid, dto, req.user);
-    return new APIResponse(
-      HttpStatus.OK,
-      'User updated successfully',
-      user,
-    );
+    try {
+      const user = await this.userService.updateUserByAdmin(uuid, dto);
+      return new APIResponse(
+        HttpStatus.OK,
+        'User updated successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get()
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async getAllUsers(@Req() req: any) {
-    const users = await this.userService.getAllUsers(req.user);
-    return new APIResponse(
-      HttpStatus.OK,
-      'Users retrieved successfully',
-      users,
-    );
+    try {
+      const users = await this.userService.getAllUsers(req.user);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Users retrieved successfully',
+        users,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get(':uuid')
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async getOneUser(
     @Param('uuid') uuid: string,
     @Req() req: any,
   ) {
-    const user = await this.userService.getOneUser(uuid, req.user);
-    return new APIResponse(
-      HttpStatus.OK,
-      'User retrieved successfully',
-      user,
-    );
+    try {
+      const user = await this.userService.getOneUser(uuid, req.user);
+      return new APIResponse(
+        HttpStatus.OK,
+        'User retrieved successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Delete(':uuid')
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async deleteUser(
     @Param('uuid') uuid: string,
     @Req() req: any,
   ) {
-    const result = await this.userService.deleteUser(uuid, req.user);
-    return new APIResponse(
-      HttpStatus.OK,
-      result.message,
-      null,
-    );
+    try {
+      const result = await this.userService.deleteUser(uuid, req.user);
+      return new APIResponse(
+        HttpStatus.OK,
+        result.message,
+        null,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch('me/profile')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadMyProfile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    try {
+      const uuid = req.user.uuid;
+      const imageUrl = await this.uploadService.saveImage(file, 'profile', uuid);
+      const user = await this.userService.updateProfileImage(uuid, imageUrl);
+      
+      return new APIResponse(
+        HttpStatus.OK,
+        'Profile image updated successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Patch(':uuid/profile')
-  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadProfile(
     @Param('uuid') uuid: string,
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: any,
   ) {
-    const imageUrl = await this.uploadService.saveImage(file, 'profile', uuid);
-    const user = await this.userService.updateProfileImage(uuid, imageUrl, req.user);
-    
-    return new APIResponse(
-      HttpStatus.OK,
-      'Profile image updated successfully',
-      user,
-    );
+    try {
+      const imageUrl = await this.uploadService.saveImage(file, 'profile', uuid);
+      const user = await this.userService.updateProfileImage(uuid, imageUrl);
+      
+      return new APIResponse(
+        HttpStatus.OK,
+        'Profile image updated successfully',
+        user,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }
-
