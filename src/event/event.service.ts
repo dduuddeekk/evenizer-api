@@ -2,10 +2,14 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventStatus, UserRole, RundownVisibility } from '@prisma/client';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto } from './dto';
+import { UploadService } from '../upload/upload.service';
 
 @Injectable()
 export class EventService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   async getAllEvents(user: any, query: GetEventsQueryDto) {
     try {
@@ -289,7 +293,7 @@ export class EventService {
     return result;
   }
 
-  async createEvent(user: any, dto: CreateEventDto) {
+  async createEvent(user: any, dto: CreateEventDto, bannerFile?: Express.Multer.File) {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const { title, start, end, status, isPublic, banner, description, categories } = dto;
@@ -308,14 +312,14 @@ export class EventService {
           };
         }
 
-        const event = await tx.event.create({
+        let event = await tx.event.create({
           data: {
             title,
             start,
             end,
             status: status || EventStatus.DRAFT,
             isPublic: isPublic || false,
-            banner,
+            banner: dto.banner,
             description,
             userId: user.id, // Linked to the authenticated user
             categories: categoriesData
@@ -328,6 +332,21 @@ export class EventService {
             }
           }
         });
+
+        if (bannerFile) {
+          const bannerUrl = await this.uploadService.saveImage(bannerFile, 'banner', event.uuid);
+          event = await tx.event.update({
+            where: { id: event.id },
+            data: { banner: bannerUrl },
+            include: {
+              categories: {
+                include: {
+                  categoryDetails: true
+                }
+              }
+            }
+          });
+        }
 
         return event;
       });
@@ -634,7 +653,7 @@ export class EventService {
     return result;
   }
 
-  async updateEvent(user: any, uuid: string, dto: UpdateEventDto) {
+  async updateEvent(user: any, uuid: string, dto: UpdateEventDto, bannerFile?: Express.Multer.File) {
     const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
@@ -667,6 +686,10 @@ export class EventService {
 
       // Update scalar fields
       let dataToUpdate: any = { ...scalarData };
+
+      if (bannerFile) {
+        dataToUpdate.banner = await this.uploadService.saveImage(bannerFile, 'banner', event.uuid);
+      }
 
       // Update categories if provided
       if (categories) {

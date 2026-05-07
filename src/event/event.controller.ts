@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Req, Body, UseGuards, HttpStatus, HttpException, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Req, Body, UseGuards, HttpStatus, HttpException, Query, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
@@ -59,12 +60,14 @@ export class EventController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('banner'))
   async createEvent(
     @Req() req: any,
     @Body() dto: CreateEventDto,
+    @UploadedFile() bannerFile?: Express.Multer.File,
   ) {
     try {
-      const event = await this.eventService.createEvent(req.user, dto);
+      const event = await this.eventService.createEvent(req.user, dto, bannerFile);
       return new APIResponse(
         HttpStatus.CREATED,
         'Event created successfully',
@@ -153,13 +156,15 @@ export class EventController {
   @Patch(':uuid')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('banner'))
   async updateEvent(
     @Req() req: any,
     @Param('uuid') uuid: string,
     @Body() dto: UpdateEventDto,
+    @UploadedFile() bannerFile?: Express.Multer.File,
   ) {
     try {
-      const event = await this.eventService.updateEvent(req.user, uuid, dto);
+      const event = await this.eventService.updateEvent(req.user, uuid, dto, bannerFile);
       return new APIResponse(
         HttpStatus.OK,
         'Event updated successfully',
