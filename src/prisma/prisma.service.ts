@@ -6,6 +6,8 @@ import * as dotenv from 'dotenv';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
+  private readonly hasDatabaseUrl: boolean;
+
   constructor() {
     dotenv.config();
 
@@ -14,6 +16,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     if (!databaseUrl) {
       console.warn('DATABASE_URL is not set; Prisma will initialize without a database adapter.');
       super({} as any);
+      this.hasDatabaseUrl = false;
       return;
     }
 
@@ -21,9 +24,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     const adapter = new PrismaPg(pool);
 
     super({ adapter } as any);
+    this.hasDatabaseUrl = true;
   }
 
   async onModuleInit() {
+    if (!this.hasDatabaseUrl) {
+      return;
+    }
+
     await this.$connect();
   }
 }
