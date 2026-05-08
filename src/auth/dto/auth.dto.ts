@@ -1,4 +1,5 @@
 import { IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 
 export enum DeviceType {
@@ -13,13 +14,16 @@ export const LoginSchema = z.object({
 });
 
 export class LoginDto {
+  @ApiProperty({ example: 'user@example.com' })
   @IsString()
   identifier: string;
 
+  @ApiProperty({ example: 'password123' })
   @IsString()
   @MinLength(8)
   password: string;
 
+  @ApiPropertyOptional({ enum: DeviceType, default: DeviceType.WEB })
   @IsEnum(DeviceType)
   @IsOptional()
   device?: DeviceType = DeviceType.WEB;
@@ -30,6 +34,7 @@ export const RefreshSchema = z.object({
 });
 
 export class RefreshTokenDto {
+  @ApiProperty({ example: 'eyJhbGciOi...' })
   @IsString()
   refreshToken: string;
 }

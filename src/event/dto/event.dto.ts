@@ -1,5 +1,6 @@
 import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsDate, IsArray, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 import { EventStatus, RundownStatus, RundownVisibility, EventOrganizerStatus } from '@prisma/client';
 
@@ -88,33 +89,41 @@ export const CreateEventSchema = z.object({
 });
 
 export class CreateEventDto {
+  @ApiProperty({ example: 'Spring Festival' })
   @IsString()
   title: string;
 
+  @ApiProperty({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   start: Date;
 
+  @ApiProperty({ type: String, example: '2026-05-10T10:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   end: Date;
 
+  @ApiPropertyOptional({ enum: EventStatus })
   @IsOptional()
   @IsEnum(EventStatus)
   status?: EventStatus;
 
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean;
 
+  @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
   @IsString()
   banner?: string;
 
+  @ApiPropertyOptional({ example: 'Event description' })
   @IsOptional()
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ type: [String], example: ['music', 'festival'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -184,41 +193,50 @@ export class GetRundownsQueryDto {
 }
 
 export class UpdateEventDto {
+  @ApiPropertyOptional({ example: 'Spring Festival' })
   @IsOptional()
   @IsString()
   title?: string;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   start?: Date;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T10:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   end?: Date;
 
+  @ApiPropertyOptional({ enum: EventStatus })
   @IsOptional()
   @IsEnum(EventStatus)
   status?: EventStatus;
 
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean;
 
+  @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
   @IsString()
   banner?: string;
 
+  @ApiPropertyOptional({ example: 'Event description' })
   @IsOptional()
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ type: [String], example: ['music', 'festival'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   categories?: string[];
 
+  @ApiPropertyOptional({ type: [String], example: ['organizer-uuid-1', 'organizer-uuid-2'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -226,72 +244,88 @@ export class UpdateEventDto {
 }
 
 export class CreateRundownDto {
+  @ApiProperty({ example: 'Opening Ceremony' })
   @IsString()
   title: string;
 
+  @ApiProperty({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   date: Date;
 
+  @ApiProperty({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   start: Date;
 
+  @ApiProperty({ type: String, example: '2026-05-10T09:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   end: Date;
 
+  @ApiPropertyOptional({ enum: RundownStatus })
   @IsOptional()
   @IsEnum(RundownStatus)
   status?: RundownStatus;
 
+  @ApiPropertyOptional({ enum: RundownVisibility })
   @IsOptional()
   @IsEnum(RundownVisibility)
   visibility?: RundownVisibility;
 
+  @ApiPropertyOptional({ example: 'Run of show details' })
   @IsOptional()
   @IsString()
   description?: string;
 }
 
 export class UpdateRundownDto {
+  @ApiPropertyOptional({ example: 'Opening Ceremony' })
   @IsOptional()
   @IsString()
   title?: string;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   date?: Date;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T08:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   start?: Date;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T09:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   end?: Date;
 
+  @ApiPropertyOptional({ enum: RundownStatus })
   @IsOptional()
   @IsEnum(RundownStatus)
   status?: RundownStatus;
 
+  @ApiPropertyOptional({ enum: RundownVisibility })
   @IsOptional()
   @IsEnum(RundownVisibility)
   visibility?: RundownVisibility;
 
+  @ApiPropertyOptional({ example: 'Run of show details' })
   @IsOptional()
   @IsString()
   description?: string;
 }
 
 export class AddOrganizerToEventDto {
+  @ApiProperty({ example: 'organizer-uuid-1' })
   @IsNotEmpty()
   @IsString()
   organizerUuid: string;
 
+  @ApiPropertyOptional({ type: [String], example: ['role-uuid-1', 'role-uuid-2'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

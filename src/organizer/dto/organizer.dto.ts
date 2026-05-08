@@ -1,5 +1,6 @@
 import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
 import { OrganizerStatus, MemberStatus } from '@prisma/client';
 
@@ -72,14 +73,17 @@ export const CreateOrganizerSchema = z.object({
 });
 
 export class CreateOrganizerDto {
+    @ApiProperty({ example: 'Evenizer Community' })
     @IsNotEmpty()
     @IsString()
     name: string;
 
+    @ApiPropertyOptional({ example: 'Community organizer' })
     @IsOptional()
     @IsString()
     description?: string;
 
+    @ApiPropertyOptional({ example: true })
     @IsOptional()
     @Type(() => Boolean)
     @IsBoolean()
@@ -94,19 +98,23 @@ export const UpdateOrganizerSchema = z.object({
 });
 
 export class UpdateOrganizerDto {
+    @ApiPropertyOptional({ example: 'Evenizer Community' })
     @IsOptional()
     @IsString()
     name?: string;
 
+    @ApiPropertyOptional({ example: 'Community organizer' })
     @IsOptional()
     @IsString()
     description?: string;
 
+    @ApiPropertyOptional({ example: true })
     @IsOptional()
     @Type(() => Boolean)
     @IsBoolean()
     isPublic?: boolean;
 
+    @ApiPropertyOptional({ enum: OrganizerStatus })
     @IsOptional()
     @IsEnum(OrganizerStatus)
     status?: OrganizerStatus;
@@ -118,10 +126,12 @@ export const CreateRoleSchema = z.object({
 });
 
 export class CreateRoleDto {
+    @ApiProperty({ example: 'Admin' })
     @IsNotEmpty()
     @IsString()
     name: string;
 
+    @ApiPropertyOptional({ example: 'Full access role' })
     @IsOptional()
     @IsString()
     description?: string;
@@ -133,10 +143,12 @@ export const UpdateRoleSchema = z.object({
 });
 
 export class UpdateRoleDto {
+    @ApiPropertyOptional({ example: 'Admin' })
     @IsOptional()
     @IsString()
     name?: string;
 
+    @ApiPropertyOptional({ example: 'Full access role' })
     @IsOptional()
     @IsString()
     description?: string;
@@ -148,10 +160,12 @@ export const InviteMemberSchema = z.object({
 });
 
 export class InviteMemberDto {
+    @ApiProperty({ example: 'user-uuid-1' })
     @IsNotEmpty()
     @IsString()
     userUuid: string;
 
+    @ApiPropertyOptional({ example: 'role-uuid-1' })
     @IsOptional()
     @IsString()
     roleUuid?: string;
@@ -164,14 +178,17 @@ export const UpdateMemberSchema = z.object({
 });
 
 export class UpdateMemberDto {
+    @ApiPropertyOptional({ example: 'role-uuid-1' })
     @IsOptional()
     @IsString()
     roleUuid?: string;
 
+    @ApiPropertyOptional({ enum: MemberStatus })
     @IsOptional()
     @IsEnum(MemberStatus)
     status?: MemberStatus;
 
+    @ApiPropertyOptional({ example: 'Not active anymore' })
     @IsOptional()
     @IsString()
     reason?: string;
@@ -182,6 +199,7 @@ export const VerifyOrganizerSchema = z.object({
 });
 
 export class VerifyOrganizerDto {
+    @ApiProperty({ example: true })
     @Type(() => Boolean)
     @IsBoolean()
     isVerified: boolean;

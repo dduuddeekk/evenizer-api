@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsDate, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TicketStatus, PaymentStatus } from '@prisma/client';
 import { z } from 'zod';
 
@@ -94,59 +95,71 @@ export const UpdateTicketTierSchema = z.object({
 });
 
 export class CreateTicketTierDto {
+  @ApiProperty({ example: 'VIP' })
   @IsString()
   name!: string;
 
+  @ApiProperty({ example: 150000 })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   price!: number;
 
+  @ApiProperty({ example: 100 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   quantity!: number;
 
+  @ApiProperty({ type: String, example: '2026-05-01T00:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   startSale!: Date;
 
+  @ApiProperty({ type: String, example: '2026-05-10T00:00:00.000Z' })
   @Type(() => Date)
   @IsDate()
   endSale!: Date;
 
+  @ApiPropertyOptional({ example: 'Early access tier' })
   @IsOptional()
   @IsString()
   description?: string;
 }
 
 export class UpdateTicketTierDto {
+  @ApiPropertyOptional({ example: 'VIP' })
   @IsOptional()
   @IsString()
   name?: string;
 
+  @ApiPropertyOptional({ example: 150000 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   price?: number;
 
+  @ApiPropertyOptional({ example: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   quantity?: number;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-01T00:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   startSale?: Date;
 
+  @ApiPropertyOptional({ type: String, example: '2026-05-10T00:00:00.000Z' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   endSale?: Date;
 
+  @ApiPropertyOptional({ example: 'Early access tier' })
   @IsOptional()
   @IsString()
   description?: string;
