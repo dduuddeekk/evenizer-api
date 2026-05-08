@@ -1,5 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as argon from 'argon2';
+import * as crypto from 'crypto';
+import { TokenType } from '@prisma/client';
 import { RegisterDto } from './dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, UserStatus } from '@prisma/client';
@@ -11,9 +13,7 @@ export class UserService {
 
   async register(dto: RegisterDto) {
     const created = await this.prisma.$transaction(async (tx) => {
-      const existingUser = await tx.user.findUnique({
-        where: { email: dto.email },
-      });
+      const existingUser = await tx.user.findUnique({ where: { email: dto.email } });
 
       if (existingUser) {
         throw new HttpException('Email already exists', HttpStatus.BAD_REQUEST);
@@ -35,24 +35,25 @@ export class UserService {
         },
       });
 
-      const { password, id, ...userWithoutPasswordAndId } = newUser;
+      // create verification token and send email inside the same transaction
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+      await tx.token.create({
+        data: {
+          token,
+          type: TokenType.EMAIL_VERIFICATION,
+          expiresAt,
+          userId: newUser.id,
+        },
+      });
+
+      // send email; if this throws, the transaction will be rolled back
+      await this.emailService.sendVerificationEmail(newUser.email, token, `${newUser.firstName || ''} ${newUser.lastName || ''}`.trim());
+
+      const { password, id, ...userWithoutPasswordAndId } = newUser;
       return userWithoutPasswordAndId;
     });
-
-    // After transaction, attempt to send verification email
-    try {
-      // need full user record to create token; fetch by email
-      const createdUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (createdUser) {
-        await this.emailService.createAndSendVerification({ id: createdUser.id, email: createdUser.email, firstName: createdUser.firstName, lastName: createdUser.lastName });
-      }
-    } catch (err: any) {
-      throw new HttpException(
-        err?.message || 'Failed to send verification email',
-        err?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
 
     return created;
   }

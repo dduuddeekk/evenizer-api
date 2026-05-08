@@ -65,11 +65,54 @@ export class UserController {
 
       res.status(HttpStatus.OK).header('Content-Type', 'text/html; charset=utf-8').send(html);
     } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      throw new HttpException(
-        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      if (error instanceof HttpException) {
+        const status = error.getStatus();
+        const resp = error.getResponse();
+        const msg = typeof resp === 'string' ? resp : (resp as any)?.message || (resp as any)?.error || 'Terjadi kesalahan';
+
+        const errorHtml = `
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width,initial-scale=1" />
+              <title>Verifikasi Gagal</title>
+              <style>
+                body { font-family: Arial, Helvetica, sans-serif; background:#f6f9fc; color:#333; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+                .card { background:#fff; padding:28px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.08); max-width:520px; text-align:center; }
+                .muted { color:#666; margin-top:8px }
+                .btn { display:inline-block; margin-top:18px; padding:10px 18px; background:#1f8ef1; color:#fff; text-decoration:none; border-radius:6px; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>Verifikasi Gagal</h1>
+                <p class="muted">${Array.isArray(msg) ? msg.join(' ') : msg}</p>
+                <a class="btn" href="${process.env.APP_URL || '/'}">Kembali ke Aplikasi</a>
+              </div>
+            </body>
+          </html>
+        `;
+
+        return res.status(status).header('Content-Type', 'text/html; charset=utf-8').send(errorHtml);
+      }
+
+      const errorHtml = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <title>Internal Server Error</title>
+          </head>
+          <body>
+            <h1>Internal Server Error</h1>
+            <p>${error?.message || 'Terjadi kesalahan pada server'}</p>
+          </body>
+        </html>
+      `;
+
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).header('Content-Type', 'text/html; charset=utf-8').send(errorHtml);
     }
   }
 
