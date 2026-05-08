@@ -156,4 +156,16 @@ export class AuthService {
 
     return result;
   }
+
+  async createEmailVerificationToken(userId: number) {
+    throw new Error('createEmailVerificationToken moved to EmailService');
+  }
+
+  async sendVerificationEmailForUser(userId: number) {
+    throw new Error('sendVerificationEmailForUser moved to EmailService');
+  }
+
+  async verifyEmailToken(token: string) {
+    throw new Error('verifyEmailToken moved to EmailService');
+  }
 }

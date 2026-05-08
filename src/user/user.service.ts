@@ -3,13 +3,14 @@ import * as argon from 'argon2';
 import { RegisterDto } from './dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, UserStatus } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService, private readonly emailService: EmailService) { }
 
   async register(dto: RegisterDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({
         where: { email: dto.email },
       });
@@ -39,7 +40,21 @@ export class UserService {
       return userWithoutPasswordAndId;
     });
 
-    return result;
+    // After transaction, attempt to send verification email
+    try {
+      // need full user record to create token; fetch by email
+      const createdUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (createdUser) {
+        await this.emailService.createAndSendVerification({ id: createdUser.id, email: createdUser.email, firstName: createdUser.firstName, lastName: createdUser.lastName });
+      }
+    } catch (err: any) {
+      throw new HttpException(
+        err?.message || 'Failed to send verification email',
+        err?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    return created;
   }
 
   async updateMyUser(uuid: string, dto: any) {
@@ -267,5 +282,18 @@ export class UserService {
     });
 
     return result;
+  }
+
+  async sendVerificationForUserId(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+    await this.emailService.createAndSendVerification({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName });
+    return { message: 'Verification email sent' };
+  }
+
+  async verifyEmailToken(token: string) {
+    const user = await this.emailService.verifyToken(token);
+    return user;
   }
 }

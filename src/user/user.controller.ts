@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException, Query } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
@@ -16,6 +16,36 @@ export class UserController {
     private readonly userService: UserService,
     private readonly uploadService: UploadService,
   ) { }
+
+  @Post('me/send-verification')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async sendMyVerification(@Req() req: any) {
+    try {
+      const result = await this.userService.sendVerificationForUserId(req.user.id);
+      return new APIResponse(HttpStatus.OK, 'Verification email sent', result);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string) {
+    try {
+      const user = await this.userService.verifyEmailToken(token);
+      return new APIResponse(HttpStatus.OK, 'Email verified successfully', user);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {

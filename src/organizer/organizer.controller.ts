@@ -4,7 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { OrganizerService } from './organizer.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
-import { OptionalJwtAuthGuard, JwtAuthGuard, RolesGuard } from '../common/guards';
+import { OptionalJwtAuthGuard, JwtAuthGuard, RolesGuard, EmailVerifiedGuard } from '../common/guards';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { GetOrganizersQueryDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto, VerifyOrganizerDto } from './dto';
@@ -50,7 +50,7 @@ export class OrganizerController {
 
     @Post()
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
     async createOrganizer(@Req() req: any, @Body() dto: CreateOrganizerDto) {
         try {
             const organizer = await this.organizerService.createOrganizer(req.user, dto);
@@ -120,7 +120,7 @@ export class OrganizerController {
 
     @Patch(':uuid')
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
     async updateOrganizer(@Req() req: any, @Param('uuid') uuid: string, @Body() dto: UpdateOrganizerDto) {
         try {
             const organizer = await this.organizerService.updateOrganizer(req.user, uuid, dto);
@@ -143,7 +143,7 @@ export class OrganizerController {
 
     @Delete(':uuid')
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
     async deleteOrganizer(@Req() req: any, @Param('uuid') uuid: string) {
         try {
             const result = await this.organizerService.deleteOrganizer(req.user, uuid);

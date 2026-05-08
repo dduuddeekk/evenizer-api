@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { APIResponse, ErrorResponse } from '../common/dto';
-import { JwtAuthGuard, OptionalJwtAuthGuard } from '../common/guards';
+import { JwtAuthGuard, OptionalJwtAuthGuard, EmailVerifiedGuard } from '../common/guards';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
 
@@ -60,7 +60,7 @@ export class EventController {
 
   @Post()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   async createEvent(
     @Req() req: any,
     @Body() dto: CreateEventDto,
@@ -154,7 +154,7 @@ export class EventController {
 
   @Patch(':uuid')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   async updateEvent(
     @Req() req: any,
     @Param('uuid') uuid: string,
@@ -215,7 +215,7 @@ export class EventController {
 
   @Delete(':uuid')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   async deleteEvent(
     @Req() req: any,
     @Param('uuid') uuid: string,
