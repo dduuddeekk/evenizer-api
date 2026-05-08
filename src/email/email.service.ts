@@ -27,7 +27,7 @@ export class EmailService {
 
   async sendVerificationEmail(to: string, token: string, fullname?: string) {
     const base = process.env.EMAIL_VERIFICATION_BASE_URL || process.env.APP_URL || 'https://evenizer-api.vercel.app';
-    const verifyUrl = `${base.replace(/\/$/, '')}/user/verify-email?token=${encodeURIComponent(token)}`;
+    const verifyUrl = `${base.replace(/\/$/, '')}/api/user/verify-email?token=${encodeURIComponent(token)}`;
 
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#333;">
