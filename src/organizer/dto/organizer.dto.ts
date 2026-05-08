@@ -76,7 +76,7 @@ export class CreateOrganizerDto {
     @ApiProperty({ example: 'Evenizer Community' })
     @IsNotEmpty()
     @IsString()
-    name: string;
+    name!: string;
 
     @ApiPropertyOptional({ example: 'Community organizer' })
     @IsOptional()
@@ -129,7 +129,7 @@ export class CreateRoleDto {
     @ApiProperty({ example: 'Admin' })
     @IsNotEmpty()
     @IsString()
-    name: string;
+    name!: string;
 
     @ApiPropertyOptional({ example: 'Full access role' })
     @IsOptional()
@@ -163,7 +163,7 @@ export class InviteMemberDto {
     @ApiProperty({ example: 'user-uuid-1' })
     @IsNotEmpty()
     @IsString()
-    userUuid: string;
+    userUuid!: string;
 
     @ApiPropertyOptional({ example: 'role-uuid-1' })
     @IsOptional()
@@ -202,5 +202,5 @@ export class VerifyOrganizerDto {
     @ApiProperty({ example: true })
     @Type(() => Boolean)
     @IsBoolean()
-    isVerified: boolean;
+    isVerified!: boolean;
 }

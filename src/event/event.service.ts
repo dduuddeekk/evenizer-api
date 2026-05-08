@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus, MemberStatus } from '@prisma/client';
-import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto } from './dto';
+import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto, EventLocationDto } from './dto';
 import { UploadService } from '../upload/upload.service';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 
@@ -11,6 +11,39 @@ export class EventService {
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
   ) {}
+
+  private buildEventLocationCreates(locations?: EventLocationDto[]) {
+    if (!locations || locations.length === 0) {
+      return undefined;
+    }
+
+    return {
+      create: locations.map((item) => ({
+        type: item.type,
+        location: item.location,
+      })),
+    };
+  }
+
+  private async resolveRundownLocationId(tx: any, eventId: number, locationUuid?: string) {
+    if (!locationUuid) {
+      return null;
+    }
+
+    const location = await tx.eventLocation.findFirst({
+      where: {
+        uuid: locationUuid,
+        eventId,
+        deletedAt: null,
+      },
+    });
+
+    if (!location) {
+      throw new HttpException('Event location not found', HttpStatus.NOT_FOUND);
+    }
+
+    return location.id;
+  }
 
   async getAllEvents(user: any, query: GetEventsQueryDto) {
     try {
@@ -138,6 +171,7 @@ export class EventService {
                 categoryDetails: true
               }
             },
+            eventLocations: true,
             ticketTiers: true,
             _count: {
               select: { favouritedBy: true }
@@ -268,6 +302,7 @@ export class EventService {
           where: finalWhere,
           include: {
             categories: { include: { categoryDetails: true } },
+            eventLocations: true,
             ticketTiers: true,
             _count: { select: { favouritedBy: true } }
           },
@@ -298,7 +333,7 @@ export class EventService {
   async createEvent(user: any, dto: CreateEventDto) {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        const { title, start, end, status, isPublic, banner, description, categories } = dto;
+        const { title, start, end, status, isPublic, banner, description, categories, locations } = dto;
 
         // Construct category nested creation logic if categories are provided
         let categoriesData: any = undefined;
@@ -324,14 +359,16 @@ export class EventService {
             banner: dto.banner,
             description,
             userId: user.id, // Linked to the authenticated user
-            categories: categoriesData
+            categories: categoriesData,
+            eventLocations: this.buildEventLocationCreates(locations)
           },
           include: {
             categories: {
               include: {
                 categoryDetails: true
               }
-            }
+            },
+            eventLocations: true
           }
         });
 
@@ -389,6 +426,7 @@ export class EventService {
               categoryDetails: true
             }
           },
+          eventLocations: true,
           ticketTiers: true,
           eventOrganizers: {
             include: {
@@ -529,6 +567,9 @@ export class EventService {
         tx.rundown.count({ where: finalWhere }),
         tx.rundown.findMany({
           where: finalWhere,
+          include: {
+            location: true,
+          },
           orderBy: { [sortBy]: sortOrder },
           skip,
           take: limit,
@@ -627,7 +668,10 @@ export class EventService {
       }
 
       const rundown = await tx.rundown.findFirst({
-        where: rundownWhere
+        where: rundownWhere,
+        include: {
+          location: true,
+        }
       });
 
       if (!rundown) {
@@ -669,7 +713,7 @@ export class EventService {
         throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
       }
 
-      const { categories, organizerUuids, ...scalarData } = dto;
+      const { categories, organizerUuids, locations, ...scalarData } = dto;
 
       // Update scalar fields
       let dataToUpdate: any = { ...scalarData };
@@ -707,11 +751,21 @@ export class EventService {
         }
       }
 
+      if (locations !== undefined) {
+        await tx.eventLocation.deleteMany({ where: { eventId: event.id } });
+
+        const eventLocationCreates = this.buildEventLocationCreates(locations);
+        if (eventLocationCreates) {
+          dataToUpdate.eventLocations = eventLocationCreates;
+        }
+      }
+
       const updatedEvent = await tx.event.update({
         where: { id: event.id },
         data: dataToUpdate,
         include: {
           categories: { include: { categoryDetails: true } },
+          eventLocations: true,
           eventOrganizers: { include: { organizer: true } }
         }
       });
@@ -817,8 +871,18 @@ export class EventService {
 
       const rundown = await tx.rundown.create({
         data: {
-          ...dto,
-          eventId: event.id
+          title: dto.title,
+          date: dto.date,
+          start: dto.start,
+          end: dto.end,
+          status: dto.status,
+          visibility: dto.visibility,
+          description: dto.description,
+          eventId: event.id,
+          locationId: await this.resolveRundownLocationId(tx, event.id, dto.locationUuid),
+        },
+        include: {
+          location: true,
         }
       });
 
@@ -861,7 +925,21 @@ export class EventService {
 
       const updatedRundown = await tx.rundown.update({
         where: { id: rundown.id },
-        data: dto
+        data: {
+          title: dto.title,
+          date: dto.date,
+          start: dto.start,
+          end: dto.end,
+          status: dto.status,
+          visibility: dto.visibility,
+          description: dto.description,
+          locationId: dto.locationUuid !== undefined
+            ? await this.resolveRundownLocationId(tx, event.id, dto.locationUuid)
+            : undefined,
+        },
+        include: {
+          location: true,
+        }
       });
 
       return updatedRundown;

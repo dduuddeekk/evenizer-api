@@ -43,6 +43,12 @@ enum EventStatus {
   CANCELLED
 }
 
+enum EventLocationType {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
 enum RundownStatus {
   DRAFT
   PENDING
@@ -180,9 +186,28 @@ model Event {
   ticketTiers     TicketTier[]
   transactions    Transaction[]
 
-  favouritedBy FavouriteEvent[]
+  favouritedBy   FavouriteEvent[]
+  eventLocations EventLocation[]
 
   @@map("events")
+}
+
+model EventLocation {
+  id       Int               @id @default(autoincrement())
+  uuid     String            @unique @default(uuid())
+  type     EventLocationType
+  location String
+
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  rundowns Rundown[]
+
+  @@map("event_locations")
 }
 
 model Category {
@@ -228,6 +253,9 @@ model Rundown {
 
   eventId Int   @map("event_id")
   event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  locationId Int?           @map("location_id")
+  location   EventLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   description String?   @db.Text
   actualStart DateTime? @map("actual_start")

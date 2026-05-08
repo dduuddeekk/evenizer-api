@@ -16,12 +16,12 @@ export const LoginSchema = z.object({
 export class LoginDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsString()
-  identifier: string;
+  identifier!: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
   @ApiPropertyOptional({ enum: DeviceType, default: DeviceType.WEB })
   @IsEnum(DeviceType)
@@ -36,6 +36,6 @@ export const RefreshSchema = z.object({
 export class RefreshTokenDto {
   @ApiProperty({ example: 'eyJhbGciOi...' })
   @IsString()
-  refreshToken: string;
+  refreshToken!: string;
 }
 

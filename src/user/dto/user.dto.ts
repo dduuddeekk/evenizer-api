@@ -14,20 +14,20 @@ export const RegisterSchema = z.object({
 export class RegisterDto {
   @ApiProperty({ example: 'Mina' })
   @IsString()
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({ example: 'Gemini' })
   @IsString()
-  lastName: string;
+  lastName!: string;
 
   @ApiProperty({ example: 'mina@example.com' })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 }
 
 export const UpdateUserSchema = z.object({
@@ -115,5 +115,5 @@ export class VerifyUserDto {
   @ApiProperty({ example: true })
   @Type(() => Boolean)
   @IsBoolean()
-  isVerified: boolean;
+  isVerified!: boolean;
 }
