@@ -1,9 +1,10 @@
-import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException, Query } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { UserService } from './user.service';
 import { UploadService } from '../upload/upload.service';
+import type { Response } from 'express';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { RegisterDto, UpdateUserDto, UpdateUserAdminDto, VerifyUserDto } from './dto';
 import { APIResponse, ErrorResponse } from '../common/dto';
@@ -34,10 +35,35 @@ export class UserController {
   }
 
   @Get('verify-email')
-  async verifyEmail(@Query('token') token: string) {
+  async verifyEmail(@Query('token') token: string, @Res() res: Response) {
     try {
-      const user = await this.userService.verifyEmailToken(token);
-      return new APIResponse(HttpStatus.OK, 'Email verified successfully', user);
+      await this.userService.verifyEmailToken(token);
+
+      const base = process.env.APP_URL || '/';
+      const html = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <title>Email Verified</title>
+            <style>
+              body { font-family: Arial, Helvetica, sans-serif; background:#f6f9fc; color:#333; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+              .card { background:#fff; padding:28px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.08); max-width:520px; text-align:center; }
+              .btn { display:inline-block; margin-top:18px; padding:10px 18px; background:#1f8ef1; color:#fff; text-decoration:none; border-radius:6px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>Akun Anda Telah Terverifikasi</h1>
+              <p>Terima kasih — email Anda berhasil diverifikasi. Anda sekarang dapat masuk dan menggunakan akun Anda.</p>
+              <a class="btn" href="${base}">Kembali ke Aplikasi</a>
+            </div>
+          </body>
+        </html>
+      `;
+
+      res.status(HttpStatus.OK).header('Content-Type', 'text/html; charset=utf-8').send(html);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
