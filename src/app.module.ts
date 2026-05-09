@@ -8,9 +8,10 @@ import { UploadModule } from './upload/upload.module';
 import { EventModule } from './event/event.module';
 import { OrganizerModule } from './organizer/organizer.module';
 import { TicketModule } from './ticket/ticket.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
-  imports: [UserModule, AuthModule, PrismaModule, UploadModule, EventModule, OrganizerModule, TicketModule],
+  imports: [UserModule, AuthModule, PrismaModule, UploadModule, EventModule, OrganizerModule, TicketModule, ReviewModule],
   controllers: [AppController],
   providers: [AppService],
 })

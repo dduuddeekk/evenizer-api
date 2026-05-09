@@ -46,4 +46,55 @@ export class UploadService {
       );
     }
   }
+  async saveReviewMedia(file: UploadedFileData, uuid: string): Promise<{ url: string, type: 'IMAGE' | 'VIDEO' }> {
+    try {
+      if (!file) {
+        throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+      }
+
+      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+      const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+
+      let type: 'IMAGE' | 'VIDEO';
+      let categoryDir: string;
+      let maxSize: number;
+
+      if (allowedImageTypes.includes(file.mimetype)) {
+        type = 'IMAGE';
+        categoryDir = 'img';
+        maxSize = 5 * 1024 * 1024; // 5MB
+      } else if (allowedVideoTypes.includes(file.mimetype)) {
+        type = 'VIDEO';
+        categoryDir = 'video';
+        maxSize = 50 * 1024 * 1024; // 50MB
+      } else {
+        throw new HttpException('Invalid file type. Only standard images and videos are allowed', HttpStatus.BAD_REQUEST);
+      }
+
+      if (file.size > maxSize) {
+        throw new HttpException(`File size exceeds ${type === 'IMAGE' ? '5MB' : '50MB'} limit`, HttpStatus.BAD_REQUEST);
+      }
+
+      const ext = path.extname(file.originalname).toLowerCase();
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const filename = `${uuid}-${uniqueSuffix}${ext}`;
+      
+      const uploadDir = path.join(__dirname, '..', '..', 'src', 'storage', categoryDir, 'review');
+      
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const filePath = path.join(uploadDir, filename);
+
+      await fs.promises.writeFile(filePath, file.buffer);
+      return { url: `/storage/${categoryDir}/review/${filename}`, type };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to save review media', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

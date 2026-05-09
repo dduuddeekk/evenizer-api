@@ -39,7 +39,6 @@ export class UserController {
     try {
       await this.userService.verifyEmailToken(token);
 
-      const base = process.env.APP_URL || '/';
       const html = `
         <!doctype html>
         <html>
@@ -57,7 +56,6 @@ export class UserController {
             <div class="card">
               <h1>Akun Anda Telah Terverifikasi</h1>
               <p>Terima kasih — email Anda berhasil diverifikasi. Anda sekarang dapat masuk dan menggunakan akun Anda.</p>
-              <a class="btn" href="${base}">Kembali ke Aplikasi</a>
             </div>
           </body>
         </html>
