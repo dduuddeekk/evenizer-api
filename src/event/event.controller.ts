@@ -128,16 +128,16 @@ export class EventController {
     }
   }
 
-  @Get(':eventUuid/rundowns/:rundownUuid')
+  @Get(':uuid/rundowns/:rundownUuid')
   @ApiBearerAuth()
   @UseGuards(OptionalJwtAuthGuard)
   async getRundownDetail(
     @Req() req: any,
-    @Param('eventUuid') eventUuid: string,
+    @Param('uuid') uuid: string,
     @Param('rundownUuid') rundownUuid: string,
   ) {
     try {
-      const rundown = await this.eventService.getRundownDetail(req.user, eventUuid, rundownUuid);
+      const rundown = await this.eventService.getRundownDetail(req.user, uuid, rundownUuid);
       return new APIResponse(
         HttpStatus.OK,
         'Rundown retrieved successfully',
@@ -236,16 +236,16 @@ export class EventController {
     }
   }
 
-  @Post(':eventUuid/rundowns')
+  @Post(':uuid/rundowns')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async createRundown(
     @Req() req: any,
-    @Param('eventUuid') eventUuid: string,
+    @Param('uuid') uuid: string,
     @Body() dto: CreateRundownDto,
   ) {
     try {
-      const rundown = await this.eventService.createRundown(req.user, eventUuid, dto);
+      const rundown = await this.eventService.createRundown(req.user, uuid, dto);
       return new APIResponse(
         HttpStatus.CREATED,
         'Rundown created successfully',
@@ -260,17 +260,17 @@ export class EventController {
     }
   }
 
-  @Patch(':eventUuid/rundowns/:rundownUuid')
+  @Patch(':uuid/rundowns/:rundownUuid')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async updateRundown(
     @Req() req: any,
-    @Param('eventUuid') eventUuid: string,
+    @Param('uuid') uuid: string,
     @Param('rundownUuid') rundownUuid: string,
     @Body() dto: UpdateRundownDto,
   ) {
     try {
-      const rundown = await this.eventService.updateRundown(req.user, eventUuid, rundownUuid, dto);
+      const rundown = await this.eventService.updateRundown(req.user, uuid, rundownUuid, dto);
       return new APIResponse(
         HttpStatus.OK,
         'Rundown updated successfully',
@@ -285,16 +285,16 @@ export class EventController {
     }
   }
 
-  @Delete(':eventUuid/rundowns/:rundownUuid')
+  @Delete(':uuid/rundowns/:rundownUuid')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   async deleteRundown(
     @Req() req: any,
-    @Param('eventUuid') eventUuid: string,
+    @Param('uuid') uuid: string,
     @Param('rundownUuid') rundownUuid: string,
   ) {
     try {
-      const result = await this.eventService.deleteRundown(req.user, eventUuid, rundownUuid);
+      const result = await this.eventService.deleteRundown(req.user, uuid, rundownUuid);
       return new APIResponse(
         HttpStatus.OK,
         'Rundown deleted successfully',
