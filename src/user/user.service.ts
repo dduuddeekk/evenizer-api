@@ -160,8 +160,8 @@ export class UserService {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      const isOwner = currentUser.uuid === user.uuid;
-      const isAdmin = currentUser.role === UserRole.ADMIN;
+      const isOwner = currentUser?.uuid === user.uuid;
+      const isAdmin = currentUser?.role === UserRole.ADMIN;
 
       // Check visibility
       if (user.deletedAt !== null || user.status === UserStatus.BANNED) {

@@ -8,7 +8,7 @@ import type { Response } from 'express';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { RegisterDto, UpdateUserDto, UpdateUserAdminDto, VerifyUserDto } from './dto';
 import { APIResponse, ErrorResponse } from '../common/dto';
-import { JwtAuthGuard, RolesGuard } from '../common/guards';
+import { JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard } from '../common/guards';
 import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('user')
@@ -201,7 +201,7 @@ export class UserController {
 
   @Get(':uuid')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async getOneUser(
     @Param('uuid') uuid: string,
     @Req() req: any,
