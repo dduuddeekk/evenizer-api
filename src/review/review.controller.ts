@@ -1,8 +1,8 @@
-import { Controller, Get, Param, Query, HttpException, HttpStatus, UseGuards, Post, Body, Req, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Param, Query, HttpException, HttpStatus, UseGuards, Post, Body, Req, UseInterceptors, UploadedFiles, Patch, Delete } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ReviewService } from './review.service';
-import { GetReviewsQueryDto, CreateReviewDto } from './dto';
+import { GetReviewsQueryDto, CreateReviewDto, UpdateReviewDto } from './dto';
 import { APIResponse, ErrorResponse } from '../common/dto';
 import { OptionalJwtAuthGuard, JwtAuthGuard } from '../common/guards';
 import type { UploadedFile as UploadedFileData } from '../common/types';
@@ -10,7 +10,7 @@ import type { UploadedFile as UploadedFileData } from '../common/types';
 @ApiTags('Review')
 @Controller('review')
 export class ReviewController {
-  constructor(private readonly reviewService: ReviewService) {}
+  constructor(private readonly reviewService: ReviewService) { }
 
   @Get('event/:eventUuid')
   @ApiBearerAuth()
@@ -81,6 +81,64 @@ export class ReviewController {
     try {
       const review = await this.reviewService.createOrganizerReview(req.user, organizerUuid, dto, files);
       return new APIResponse(HttpStatus.CREATED, 'Organizer review created successfully', review);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async getReviewDetail(@Param('uuid') uuid: string) {
+    try {
+      const review = await this.reviewService.getReviewDetail(uuid);
+      return new APIResponse(HttpStatus.OK, 'Review retrieved successfully', review);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('medias'))
+  async updateReview(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+    @Body() dto: UpdateReviewDto,
+    @UploadedFiles() files: UploadedFileData[],
+  ) {
+    try {
+      const review = await this.reviewService.updateReview(req.user, uuid, dto as CreateReviewDto, files);
+      return new APIResponse(HttpStatus.OK, 'Review updated successfully', review);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Delete(':uuid')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async deleteReview(
+    @Req() req: any,
+    @Param('uuid') uuid: string,
+  ) {
+    try {
+      const result = await this.reviewService.deleteReview(req.user, uuid);
+      return new APIResponse(HttpStatus.OK, result.message, null);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(

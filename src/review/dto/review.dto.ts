@@ -53,3 +53,22 @@ export class CreateReviewDto {
   @IsString()
   comment?: string;
 }
+
+export const UpdateReviewSchema = z.object({
+  rating: z.coerce.number().min(1).max(5).optional(),
+  comment: z.string().optional(),
+});
+
+export class UpdateReviewDto {
+  @ApiPropertyOptional({ example: 5, description: 'Rating from 1 to 5' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  rating?: number;
+
+  @ApiPropertyOptional({ example: 'Great event!' })
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
