@@ -342,7 +342,7 @@ export class EventService {
             create: categories.map(tag => ({
               categoryDetails: {
                 create: {
-                  name: tag
+                  name: tag.toLowerCase()
                 }
               }
             }))
