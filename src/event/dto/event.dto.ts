@@ -83,7 +83,6 @@ export const CreateEventSchema = z.object({
   end: z.coerce.date(),
   status: z.nativeEnum(EventStatus).optional(),
   isPublic: z.boolean().optional(),
-  banner: z.string().optional(),
   description: z.string().optional(),
   categories: z.array(z.string()).optional(),
   locations: z.array(z.object({
@@ -127,10 +126,6 @@ export class CreateEventDto {
   @IsBoolean()
   isPublic?: boolean;
 
-  @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
-  @IsOptional()
-  @IsString()
-  banner?: string;
 
   @ApiPropertyOptional({ example: 'Event description' })
   @IsOptional()
