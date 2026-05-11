@@ -378,6 +378,8 @@ export class EventService {
 
         // 3) sanitize event response: remove numeric ids and replace userId with userUuid
         const removeIdFields = (obj: any): any => {
+          if (obj === null || obj === undefined) return obj;
+          if (obj instanceof Date) return obj; // preserve Date so JSON serializes to ISO string
           if (Array.isArray(obj)) return obj.map(removeIdFields);
           if (obj && typeof obj === 'object') {
             const res: any = {};
