@@ -2,8 +2,20 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { put } from '@vercel/blob';
+import sharp from 'sharp';
 import { ErrorResponse } from '../common/dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
+
+const MAX_IMAGE_SIZE_BYTES = 1 * 1024 * 1024;
+const IMAGE_COMPRESSION_STEPS = [
+  { quality: 82, width: 1600 },
+  { quality: 72, width: 1440 },
+  { quality: 62, width: 1280 },
+  { quality: 52, width: 1080 },
+  { quality: 42, width: 960 },
+  { quality: 32, width: 800 },
+  { quality: 24, width: 640 },
+];
 
 function getStorageRoot() {
   return process.env.VERCEL
@@ -47,6 +59,47 @@ async function saveBufferToLocalFile(
   await fs.promises.writeFile(filePath, buffer);
 }
 
+async function compressImageToWebp(buffer: Buffer) {
+  let compressedBuffer: Buffer | null = null;
+
+  for (const step of IMAGE_COMPRESSION_STEPS) {
+    compressedBuffer = await sharp(buffer)
+      .rotate()
+      .resize({
+        width: step.width,
+        height: step.width,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: step.quality })
+      .toBuffer();
+
+    if (compressedBuffer.length <= MAX_IMAGE_SIZE_BYTES) {
+      return compressedBuffer;
+    }
+  }
+
+  if (!compressedBuffer) {
+    throw new HttpException('Failed to compress image', HttpStatus.BAD_REQUEST);
+  }
+
+  if (compressedBuffer.length > MAX_IMAGE_SIZE_BYTES) {
+    throw new HttpException('Unable to compress image below 1MB', HttpStatus.BAD_REQUEST);
+  }
+
+  return compressedBuffer;
+}
+
+async function prepareImageUpload(file: UploadedFileData) {
+  const compressedBuffer = await compressImageToWebp(file.buffer);
+
+  return {
+    buffer: compressedBuffer,
+    filenameExtension: '.webp',
+    mimeType: 'image/webp',
+  };
+}
+
 @Injectable()
 export class UploadService {
   async saveImage(file: UploadedFileData, category: 'profile' | 'banner' | 'logo', uuid: string): Promise<string> {
@@ -65,15 +118,20 @@ export class UploadService {
         throw new HttpException('File size exceeds 5MB limit', HttpStatus.BAD_REQUEST);
       }
 
-      const ext = path.extname(file.originalname).toLowerCase();
-      const filename = `${uuid}${ext}`;
+      const preparedImage = await prepareImageUpload(file);
+      const filename = `${uuid}${preparedImage.filenameExtension}`;
 
       if (hasBlobToken()) {
-        return saveBufferToBlob(`img/${category}/${filename}`, file);
+        return saveBufferToBlob(`img/${category}/${filename}`, {
+          ...file,
+          buffer: preparedImage.buffer,
+          mimetype: preparedImage.mimeType,
+          originalname: filename,
+        });
       }
 
       const filePath = path.join(getStorageRoot(), 'img', category, filename);
-      await saveBufferToLocalFile(filePath, file.buffer);
+      await saveBufferToLocalFile(filePath, preparedImage.buffer);
       return `/storage/img/${category}/${filename}`;
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
@@ -112,17 +170,23 @@ export class UploadService {
         throw new HttpException(`File size exceeds ${type === 'IMAGE' ? '5MB' : '50MB'} limit`, HttpStatus.BAD_REQUEST);
       }
 
-      const ext = path.extname(file.originalname).toLowerCase();
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      const filename = `${uuid}-${uniqueSuffix}${ext}`;
+      const isImage = type === 'IMAGE';
+      const preparedImage = isImage ? await prepareImageUpload(file) : null;
+      const filename = `${uuid}-${uniqueSuffix}${isImage ? preparedImage!.filenameExtension : path.extname(file.originalname).toLowerCase()}`;
 
       if (hasBlobToken()) {
-        const url = await saveBufferToBlob(`review/${categoryDir}/${filename}`, file);
+        const url = await saveBufferToBlob(`review/${categoryDir}/${filename}`, isImage ? {
+          ...file,
+          buffer: preparedImage!.buffer,
+          mimetype: preparedImage!.mimeType,
+          originalname: filename,
+        } : file);
         return { url, type };
       }
 
       const filePath = path.join(getStorageRoot(), categoryDir, 'review', filename);
-      await saveBufferToLocalFile(filePath, file.buffer);
+      await saveBufferToLocalFile(filePath, isImage ? preparedImage!.buffer : file.buffer);
       return { url: `/storage/${categoryDir}/review/${filename}`, type };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
