@@ -45,6 +45,195 @@ export class EventService {
     return location.id;
   }
 
+  private normalizeUuidResponse(
+    value: any,
+    context: { parentUuid?: string; parentType?: string; rootEventUuid?: string } = {},
+  ): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    if (value instanceof Date) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.normalizeUuidResponse(item, context));
+    }
+
+    if (typeof value !== 'object') {
+      return value;
+    }
+
+    const normalized: any = {};
+    const objectValue: any = value;
+
+    if (objectValue.uuid !== undefined) {
+      normalized.uuid = objectValue.uuid;
+    }
+
+    for (const [key, nestedValue] of Object.entries(objectValue)) {
+      if (key === 'id') {
+        continue;
+      }
+
+      if (key === 'user' && nestedValue && typeof nestedValue === 'object') {
+        if ((nestedValue as any).uuid !== undefined) {
+          normalized.userUuid = (nestedValue as any).uuid;
+        }
+        continue;
+      }
+
+      if (key.endsWith('Id')) {
+        const baseKey = key.slice(0, -2);
+
+        if (baseKey === 'event') {
+          normalized.eventUuid = context.rootEventUuid ?? (context.parentType === 'event' ? context.parentUuid : objectValue.event?.uuid);
+          continue;
+        }
+
+        if (baseKey === 'category') {
+          normalized.categoryUuid = context.parentType === 'category' ? context.parentUuid : objectValue.category?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'eventOrganizer') {
+          normalized.eventOrganizerUuid = context.parentType === 'eventOrganizer' ? context.parentUuid : objectValue.eventOrganizer?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'organizer') {
+          normalized.organizerUuid = context.parentType === 'organizer' ? context.parentUuid : objectValue.organizer?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'role') {
+          normalized.roleUuid = objectValue.role?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'ticketTier') {
+          normalized.ticketTierUuid = objectValue.ticketTier?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'transaction') {
+          normalized.transactionUuid = objectValue.transaction?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'following') {
+          normalized.followingUuid = objectValue.following?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'follower') {
+          normalized.followerUuid = objectValue.follower?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'location') {
+          normalized.locationUuid = context.parentType === 'eventLocation' ? context.parentUuid : objectValue.location?.uuid;
+          continue;
+        }
+
+        if (baseKey === 'user') {
+          normalized.userUuid = objectValue.user?.uuid;
+          continue;
+        }
+
+        continue;
+      }
+
+      if (nestedValue instanceof Date) {
+        normalized[key] = nestedValue;
+        continue;
+      }
+
+      if (Array.isArray(nestedValue)) {
+        const childParentType = this.inferChildParentType(key, context.parentType);
+        const childContext = {
+          parentUuid: objectValue.uuid ?? context.parentUuid,
+          parentType: childParentType ?? context.parentType,
+          rootEventUuid: context.rootEventUuid ?? objectValue.uuid ?? context.parentUuid,
+        };
+
+        normalized[key] = nestedValue.map((item) => this.normalizeUuidResponse(item, childContext));
+        continue;
+      }
+
+      if (nestedValue && typeof nestedValue === 'object') {
+        const childParentType = this.inferChildParentType(key, context.parentType);
+        const childContext = {
+          parentUuid: objectValue.uuid ?? context.parentUuid,
+          parentType: childParentType ?? context.parentType,
+          rootEventUuid: context.rootEventUuid ?? objectValue.uuid ?? context.parentUuid,
+        };
+
+        normalized[key] = this.normalizeUuidResponse(nestedValue, childContext);
+        continue;
+      }
+
+      normalized[key] = nestedValue;
+    }
+
+    if (normalized.uuid === undefined && objectValue.uuid !== undefined) {
+      normalized.uuid = objectValue.uuid;
+    }
+
+    return normalized;
+  }
+
+  private detectParentType(value: any): string | undefined {
+    if (value && typeof value === 'object') {
+      if (Object.prototype.hasOwnProperty.call(value, 'title') && Object.prototype.hasOwnProperty.call(value, 'start') && Object.prototype.hasOwnProperty.call(value, 'end')) {
+        return 'event';
+      }
+
+      if (Object.prototype.hasOwnProperty.call(value, 'type') && Object.prototype.hasOwnProperty.call(value, 'location')) {
+        return 'eventLocation';
+      }
+
+      if (Object.prototype.hasOwnProperty.call(value, 'name') && Object.prototype.hasOwnProperty.call(value, 'categoryDetails')) {
+        return 'category';
+      }
+
+      if (Object.prototype.hasOwnProperty.call(value, 'status') && Object.prototype.hasOwnProperty.call(value, 'eventOrganizerDetails')) {
+        return 'eventOrganizer';
+      }
+
+      if (Object.prototype.hasOwnProperty.call(value, 'title') && Object.prototype.hasOwnProperty.call(value, 'date') && Object.prototype.hasOwnProperty.call(value, 'visibility')) {
+        return 'rundown';
+      }
+    }
+
+    return undefined;
+  }
+
+  private inferChildParentType(key: string, parentType?: string): string | undefined {
+    if (key === 'categories' || key === 'eventLocations' || key === 'ticketTiers' || key === 'eventOrganizers') {
+      return 'event';
+    }
+
+    if (key === 'categoryDetails') {
+      return 'category';
+    }
+
+    if (key === 'eventOrganizerDetails') {
+      return 'eventOrganizer';
+    }
+
+    if (key === 'organizerMembers') {
+      return 'organizer';
+    }
+
+    if (key === 'location') {
+      return 'rundown';
+    }
+
+    return parentType;
+  }
+
   async getAllEvents(user: any, query: GetEventsQueryDto) {
     try {
       const { search, category, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
@@ -166,6 +355,9 @@ export class EventService {
         this.prisma.event.findMany({
           where: finalWhere,
           include: {
+            user: {
+              select: { uuid: true }
+            },
             categories: {
               include: {
                 categoryDetails: true
@@ -184,13 +376,16 @@ export class EventService {
       ]);
 
       const [total, events] = result;
+      const normalizedEvents = events.map((event) =>
+        this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
+      );
 
-      if (!events || events.length === 0) {
+      if (!normalizedEvents || normalizedEvents.length === 0) {
         throw new HttpException('No events found', HttpStatus.NOT_FOUND);
       }
 
       const paginatedResult = {
-        data: events,
+        data: normalizedEvents,
         meta: {
           total,
           page,
@@ -301,6 +496,9 @@ export class EventService {
         tx.event.findMany({
           where: finalWhere,
           include: {
+            user: {
+              select: { uuid: true }
+            },
             categories: { include: { categoryDetails: true } },
             eventLocations: true,
             ticketTiers: true,
@@ -316,8 +514,12 @@ export class EventService {
         throw new HttpException('No events found', HttpStatus.NOT_FOUND);
       }
 
+      const normalizedEvents = events.map((event) =>
+        this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
+      );
+
       return {
-        data: events,
+        data: normalizedEvents,
         meta: {
           total,
           page,
@@ -364,6 +566,9 @@ export class EventService {
             eventLocations: this.buildEventLocationCreates(locations)
           },
           include: {
+            user: {
+              select: { uuid: true }
+            },
             categories: {
               include: {
                 categoryDetails: true
@@ -375,28 +580,7 @@ export class EventService {
         });
 
         // Banner should be uploaded via PATCH /event/:uuid/banner
-
-        // 3) sanitize event response: remove numeric ids and replace userId with userUuid
-        const removeIdFields = (obj: any): any => {
-          if (obj === null || obj === undefined) return obj;
-          if (obj instanceof Date) return obj; // preserve Date so JSON serializes to ISO string
-          if (Array.isArray(obj)) return obj.map(removeIdFields);
-          if (obj && typeof obj === 'object') {
-            const res: any = {};
-            for (const [k, v] of Object.entries(obj)) {
-              if (k === 'id' || k.endsWith('Id')) continue;
-              res[k] = removeIdFields(v);
-            }
-            return res;
-          }
-          return obj;
-        };
-
-        const sanitized = removeIdFields(event);
-        // attach userUuid instead of userId
-        sanitized.userUuid = user?.uuid ?? null;
-
-        return sanitized;
+        return this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
       });
 
       return result;
@@ -445,6 +629,9 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: whereClause,
         include: {
+          user: {
+            select: { uuid: true }
+          },
           categories: {
             include: {
               categoryDetails: true
@@ -454,7 +641,27 @@ export class EventService {
           ticketTiers: true,
           eventOrganizers: {
             include: {
-              organizer: true
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: {
+                    include: {
+                      user: {
+                        select: { uuid: true }
+                      },
+                      role: {
+                        include: {
+                          organizer: {
+                            select: { uuid: true }
+                          }
+                        }
+                      }
+                    }
+                  },
+                }
+              }
             }
           },
           _count: {
@@ -470,7 +677,7 @@ export class EventService {
         throw new HttpException('Event not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
       }
 
-      return event;
+      return this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -513,11 +720,30 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: eventWhereClause,
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
             include: {
               organizer: {
                 include: {
-                  organizerMembers: true
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: {
+                    include: {
+                      user: {
+                        select: { uuid: true }
+                      },
+                      role: {
+                        include: {
+                          organizer: {
+                            select: { uuid: true }
+                          }
+                        }
+                      }
+                    }
+                  },
                 }
               }
             }
@@ -604,8 +830,12 @@ export class EventService {
         throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
       }
 
+      const normalizedRundowns = rundowns.map((rundown) =>
+        this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid }),
+      );
+
       return {
-        data: rundowns,
+        data: normalizedRundowns,
         meta: {
           total,
           page,
@@ -655,10 +885,18 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: eventWhereClause,
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
             include: {
               organizer: {
-                include: { organizerMembers: true }
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
               }
             }
           }
@@ -702,7 +940,7 @@ export class EventService {
         throw new HttpException('Rundown not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
       }
 
-      return rundown;
+      return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -713,8 +951,20 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
-            include: { organizer: { include: { organizerMembers: true } } }
+            include: {
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
+              }
+            }
           }
         }
       });
@@ -788,13 +1038,27 @@ export class EventService {
         where: { id: event.id },
         data: dataToUpdate,
         include: {
+          user: {
+            select: { uuid: true }
+          },
           categories: { include: { categoryDetails: true } },
           eventLocations: true,
-          eventOrganizers: { include: { organizer: true } }
+          eventOrganizers: {
+            include: {
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
+              }
+            }
+          }
         }
       });
 
-      return updatedEvent;
+      return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -805,8 +1069,20 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
-            include: { organizer: { include: { organizerMembers: true } } }
+            include: {
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
+              }
+            }
           }
         }
       });
@@ -834,9 +1110,29 @@ export class EventService {
       const updatedEvent = await tx.event.update({
         where: { id: event.id },
         data: { banner: bannerUrl },
+        include: {
+          user: {
+            select: { uuid: true }
+          },
+          categories: { include: { categoryDetails: true } },
+          eventLocations: true,
+          eventOrganizers: {
+            include: {
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
+              }
+            }
+          },
+          ticketTiers: true,
+        },
       });
 
-      return updatedEvent;
+      return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -873,8 +1169,20 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
-            include: { organizer: { include: { organizerMembers: true } } }
+            include: {
+              organizer: {
+                include: {
+                  user: {
+                    select: { uuid: true }
+                  },
+                  organizerMembers: true,
+                }
+              }
+            }
           }
         }
       });
@@ -910,7 +1218,7 @@ export class EventService {
         }
       });
 
-      return rundown;
+      return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -921,8 +1229,11 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
-            include: { organizer: { include: { organizerMembers: true } } }
+            include: { organizer: { include: { organizerMembers: true, user: { select: { uuid: true } } } } }
           }
         }
       });
@@ -966,7 +1277,7 @@ export class EventService {
         }
       });
 
-      return updatedRundown;
+      return this.normalizeUuidResponse(updatedRundown, { parentType: 'rundown', rootEventUuid: event.uuid });
     });
 
     return result;
@@ -977,8 +1288,11 @@ export class EventService {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
+          user: {
+            select: { uuid: true }
+          },
           eventOrganizers: {
-            include: { organizer: { include: { organizerMembers: true } } }
+            include: { organizer: { include: { organizerMembers: true, user: { select: { uuid: true } } } } }
           }
         }
       });
@@ -1161,12 +1475,12 @@ export class EventService {
       const fullEventOrganizer = await tx.eventOrganizer.findUnique({
         where: { id: eventOrganizer.id },
         include: {
-          organizer: true,
-          eventOrganizerDetails: { include: { role: true } }
+          organizer: { include: { user: { select: { uuid: true } } } },
+          eventOrganizerDetails: { include: { role: { include: { organizer: { select: { uuid: true } } } } } }
         }
       });
 
-      return fullEventOrganizer;
+      return this.normalizeUuidResponse(fullEventOrganizer, { parentType: 'eventOrganizer', rootEventUuid: event.uuid });
     });
 
     return result;
