@@ -25,6 +25,7 @@ async function saveBufferToBlob(
 
   const { url } = await put(blobPath, uploadedBlob, {
     access: 'public',
+    allowOverwrite: true,
     token: process.env.BLOB_READ_WRITE_TOKEN,
   });
 
