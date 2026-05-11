@@ -1,5 +1,5 @@
 import { Controller, Post, Body, HttpStatus, Patch, Param, Req, UseGuards, Get, Delete, UseInterceptors, UploadedFile, HttpException, Query, Res } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { UserService } from './user.service';
@@ -248,6 +248,18 @@ export class UserController {
   @Patch('me/profile')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadMyProfile(
     @UploadedFile() file: UploadedFileData,
@@ -276,6 +288,18 @@ export class UserController {
   @ApiBearerAuth()
   @Roles(UserRole.ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadProfile(
     @Param('uuid') uuid: string,
