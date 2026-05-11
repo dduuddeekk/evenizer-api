@@ -29,7 +29,9 @@ async function saveBufferToBlob(
     token: process.env.BLOB_READ_WRITE_TOKEN,
   });
 
-  return url;
+  // Add cache-busting query parameter with current timestamp
+  const cacheBuster = `?t=${Date.now()}`;
+  return url + cacheBuster;
 }
 
 async function saveBufferToLocalFile(
