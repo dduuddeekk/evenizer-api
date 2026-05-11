@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { put } from '@vercel/blob';
 import { ErrorResponse } from '../common/dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 
@@ -8,6 +9,39 @@ function getStorageRoot() {
   return process.env.VERCEL
     ? path.join('/tmp', 'evenizer-storage')
     : path.join(process.cwd(), 'src', 'storage');
+}
+
+function hasBlobToken() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+async function saveBufferToBlob(
+  blobPath: string,
+  file: UploadedFileData,
+): Promise<string> {
+  const uploadedBlob = new Blob([new Uint8Array(file.buffer)], {
+    type: file.mimetype,
+  });
+
+  const { url } = await put(blobPath, uploadedBlob, {
+    access: 'public',
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  });
+
+  return url;
+}
+
+async function saveBufferToLocalFile(
+  filePath: string,
+  buffer: Buffer,
+) {
+  const directory = path.dirname(filePath);
+
+  if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+
+  await fs.promises.writeFile(filePath, buffer);
 }
 
 @Injectable()
@@ -30,18 +64,13 @@ export class UploadService {
 
       const ext = path.extname(file.originalname).toLowerCase();
       const filename = `${uuid}${ext}`;
-      
-      const uploadDir = path.join(getStorageRoot(), 'img', category);
-      
-      // Ensure directory exists (though we created .gitkeep, good to be safe)
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+
+      if (hasBlobToken()) {
+        return saveBufferToBlob(`img/${category}/${filename}`, file);
       }
 
-      const filePath = path.join(uploadDir, filename);
-
-      await fs.promises.writeFile(filePath, file.buffer);
-      // Return the public URL path
+      const filePath = path.join(getStorageRoot(), 'img', category, filename);
+      await saveBufferToLocalFile(filePath, file.buffer);
       return `/storage/img/${category}/${filename}`;
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
@@ -83,16 +112,14 @@ export class UploadService {
       const ext = path.extname(file.originalname).toLowerCase();
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
       const filename = `${uuid}-${uniqueSuffix}${ext}`;
-      
-      const uploadDir = path.join(getStorageRoot(), categoryDir, 'review');
-      
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+
+      if (hasBlobToken()) {
+        const url = await saveBufferToBlob(`review/${categoryDir}/${filename}`, file);
+        return { url, type };
       }
 
-      const filePath = path.join(uploadDir, filename);
-
-      await fs.promises.writeFile(filePath, file.buffer);
+      const filePath = path.join(getStorageRoot(), categoryDir, 'review', filename);
+      await saveBufferToLocalFile(filePath, file.buffer);
       return { url: `/storage/${categoryDir}/review/${filename}`, type };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
