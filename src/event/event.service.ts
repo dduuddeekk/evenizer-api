@@ -333,7 +333,7 @@ export class EventService {
   async createEvent(user: any, dto: CreateEventDto) {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        const { title, start, end, status, isPublic, banner, description, categories, locations } = dto;
+        const { title, start, end, status, isPublic, description, categories, locations } = dto;
 
         // Construct category nested creation logic if categories are provided
         let categoriesData: any = undefined;
@@ -349,6 +349,7 @@ export class EventService {
           };
         }
 
+        // 1) create event without banner first
         let event = await tx.event.create({
           data: {
             title,
@@ -356,7 +357,7 @@ export class EventService {
             end,
             status: status || EventStatus.DRAFT,
             isPublic: isPublic || false,
-            banner: dto.banner,
+            banner: null,
             description,
             userId: user.id, // Linked to the authenticated user
             categories: categoriesData,
@@ -368,11 +369,32 @@ export class EventService {
                 categoryDetails: true
               }
             },
-            eventLocations: true
+            eventLocations: true,
+            ticketTiers: true,
           }
         });
 
-        return event;
+        // Banner should be uploaded via PATCH /event/:uuid/banner
+
+        // 3) sanitize event response: remove numeric ids and replace userId with userUuid
+        const removeIdFields = (obj: any): any => {
+          if (Array.isArray(obj)) return obj.map(removeIdFields);
+          if (obj && typeof obj === 'object') {
+            const res: any = {};
+            for (const [k, v] of Object.entries(obj)) {
+              if (k === 'id' || k.endsWith('Id')) continue;
+              res[k] = removeIdFields(v);
+            }
+            return res;
+          }
+          return obj;
+        };
+
+        const sanitized = removeIdFields(event);
+        // attach userUuid instead of userId
+        sanitized.userUuid = user?.uuid ?? null;
+
+        return sanitized;
       });
 
       return result;

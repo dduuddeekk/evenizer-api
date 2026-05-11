@@ -66,7 +66,15 @@ export class EventController {
     @Body() dto: CreateEventDto,
   ) {
     try {
-      const event = await this.eventService.createEvent(req.user, dto);
+      const parsedDto: any = { ...dto };
+      if (typeof parsedDto.categories === 'string') {
+        try { parsedDto.categories = JSON.parse(parsedDto.categories); } catch { parsedDto.categories = []; }
+      }
+      if (typeof parsedDto.locations === 'string') {
+        try { parsedDto.locations = JSON.parse(parsedDto.locations); } catch { parsedDto.locations = []; }
+      }
+
+      const event = await this.eventService.createEvent(req.user, parsedDto);
       return new APIResponse(
         HttpStatus.CREATED,
         'Event created successfully',
