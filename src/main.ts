@@ -7,6 +7,12 @@ import { GlobalExceptionFilter } from './common/filters/';
 import { join } from 'path';
 import type { Request, Response } from 'express';
 
+function getStorageRoot() {
+  return process.env.VERCEL
+    ? join('/tmp', 'evenizer-storage')
+    : join(process.cwd(), 'src', 'storage');
+}
+
 let cachedApp: NestExpressApplication | null = null;
 let cachedHandler: ((req: Request, res: Response) => unknown) | null = null;
 
@@ -16,7 +22,7 @@ async function createApp() {
   app.setGlobalPrefix('api');
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  app.useStaticAssets(join(__dirname, '..', 'src', 'storage'), {
+  app.useStaticAssets(getStorageRoot(), {
     prefix: '/storage/',
   });
 

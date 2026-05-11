@@ -4,6 +4,12 @@ import * as path from 'path';
 import { ErrorResponse } from '../common/dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 
+function getStorageRoot() {
+  return process.env.VERCEL
+    ? path.join('/tmp', 'evenizer-storage')
+    : path.join(process.cwd(), 'src', 'storage');
+}
+
 @Injectable()
 export class UploadService {
   async saveImage(file: UploadedFileData, category: 'profile' | 'banner' | 'logo', uuid: string): Promise<string> {
@@ -25,8 +31,7 @@ export class UploadService {
       const ext = path.extname(file.originalname).toLowerCase();
       const filename = `${uuid}${ext}`;
       
-      // Using src/storage/img since the static assets map /storage to src/storage
-      const uploadDir = path.join(__dirname, '..', '..', 'src', 'storage', 'img', category);
+      const uploadDir = path.join(getStorageRoot(), 'img', category);
       
       // Ensure directory exists (though we created .gitkeep, good to be safe)
       if (!fs.existsSync(uploadDir)) {
@@ -79,7 +84,7 @@ export class UploadService {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
       const filename = `${uuid}-${uniqueSuffix}${ext}`;
       
-      const uploadDir = path.join(__dirname, '..', '..', 'src', 'storage', categoryDir, 'review');
+      const uploadDir = path.join(getStorageRoot(), categoryDir, 'review');
       
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
