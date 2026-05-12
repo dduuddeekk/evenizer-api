@@ -42,7 +42,9 @@ export class AuthService {
       if (isMobile) {
         // Mobile: 1 Token (Access Token), 1 Year
         const expiresInSeconds = 365 * 24 * 60 * 60;
+        const expiresRefresh = expiresInSeconds * 5; // Just for reference, not used since we won't issue a refresh token for mobile
         const accessToken = this.jwtService.sign(payload, { expiresIn: expiresInSeconds });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: expiresRefresh }); // Still generate a refresh token for mobile, but we won't store it or use it
 
         await tx.token.create({
           data: {
@@ -53,8 +55,17 @@ export class AuthService {
           },
         });
 
+        await tx.token.create({
+          data: {
+            token: accessToken, // Store the same token for mobile since we won't issue a separate refresh token
+            type: TokenType.REFRESH, // Still mark it as REFRESH for clarity, even though it's the same token
+            expiresAt: new Date(Date.now() + expiresRefresh * 1000),
+            userId: user.id,
+          },
+        });
+
         const { password, id, ...userWithoutPasswordAndId } = user;
-        return { user: userWithoutPasswordAndId, accessToken, device: dto.device };
+        return { user: userWithoutPasswordAndId, accessToken, refreshToken, device: dto.device };
       } else {
         // Web: Access Token (short) + Refresh Token (long)
         const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
