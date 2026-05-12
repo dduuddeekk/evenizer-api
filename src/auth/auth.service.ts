@@ -54,7 +54,7 @@ export class AuthService {
         });
 
         const { password, id, ...userWithoutPasswordAndId } = user;
-        return { user: userWithoutPasswordAndId, accessToken };
+        return { user: userWithoutPasswordAndId, accessToken, device: dto.device };
       } else {
         // Web: Access Token (short) + Refresh Token (long)
         const jwtExpiresSecond = parseInt(process.env.JWT_EXPIRES_SECOND || '120');
@@ -82,7 +82,7 @@ export class AuthService {
         });
 
         const { password, id, ...userWithoutPasswordAndId } = user;
-        return { user: userWithoutPasswordAndId, accessToken, refreshToken };
+        return { user: userWithoutPasswordAndId, accessToken, refreshToken, device: dto.device };
       }
     });
 
