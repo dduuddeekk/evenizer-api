@@ -34,6 +34,29 @@ export class EventController {
     }
   }
 
+  @Get('my-event')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async getMyEvents(
+    @Req() req: any,
+    @Query() query: GetEventsQueryDto,
+  ) {
+    try {
+      const events = await this.eventService.getMyEvents(req.user, query);
+      return new APIResponse(
+        HttpStatus.OK,
+        'Your events retrieved successfully',
+        events,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', error?.message || error),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get('organizer/:organizerUuid')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)

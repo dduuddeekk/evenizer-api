@@ -239,46 +239,18 @@ export class EventService {
       const { search, category, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
       const page = Number(query.page) || 1;
       const limit = Number(query.limit) || 10;
-      let whereClause: any = {};
+      
+      // Base condition: only show public events that are not DRAFT
+      const andConditions: any[] = [
+        {
+          isPublic: true,
+          status: {
+            not: EventStatus.DRAFT,
+          },
+        },
+      ];
 
-      if (!user || user.role !== UserRole.ADMIN) {
-        // Normal user or guest logic
-        whereClause = {
-          OR: [
-            // Can see if it's public AND not a draft
-            {
-              isPublic: true,
-              status: {
-                not: EventStatus.DRAFT,
-              },
-            },
-            // If logged in, can also see their own events regardless of status or visibility
-            ...(user ? [
-              { userId: user.id },
-              {
-                eventOrganizers: {
-                  some: {
-                    organizer: {
-                      organizerMembers: {
-                        some: {
-                          userId: user.id,
-                          status: MemberStatus.ACTIVE, // Only ACTIVE members can see
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            ] : []),
-          ],
-        };
-      }
-
-      // Add query filters if provided
-      const andConditions: any[] = [];
-      if (Object.keys(whereClause).length > 0) {
-        andConditions.push(whereClause);
-      }
+      // Add additional query filters if provided
 
       if (search) {
         andConditions.push({ title: { contains: search } });
@@ -308,7 +280,7 @@ export class EventService {
         andConditions.push({ isPublic });
       }
 
-      const finalWhere = andConditions.length > 0 ? { AND: andConditions } : {};
+      const finalWhere = { AND: andConditions };
 
       // If groupBy is requested, return grouped stats instead of paginated events
       if (groupBy) {
@@ -380,6 +352,147 @@ export class EventService {
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
 
+      const paginatedResult = {
+        data: normalizedEvents,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        }
+      };
+
+      return paginatedResult;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to retrieve public events',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  async getMyEvents(user: any, query: GetEventsQueryDto) {
+    try {
+      if (!user || !user.uuid) {
+        throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+      }
+
+      // Find the user by uuid from token payload
+      const currentUser = await this.prisma.user.findFirst({
+        where: { uuid: user.uuid },
+        select: { id: true }
+      });
+
+      if (!currentUser) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      const { search, category, status, isPublic, sortBy = 'createdAt', sortOrder = 'desc', groupBy } = query;
+      const page = Number(query.page) || 1;
+      const limit = Number(query.limit) || 10;
+
+      // Build where clause for user's events
+      const andConditions: any[] = [
+        { userId: currentUser.id }
+      ];
+
+      if (search) {
+        andConditions.push({ title: { contains: search } });
+      }
+
+      if (category) {
+        andConditions.push({
+          categories: {
+            some: {
+              categoryDetails: {
+                some: {
+                  name: {
+                    equals: category
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      if (status) {
+        andConditions.push({ status });
+      }
+
+      if (isPublic !== undefined) {
+        andConditions.push({ isPublic });
+      }
+
+      const finalWhere = { AND: andConditions };
+
+      // If groupBy is requested, return grouped stats instead of paginated events
+      if (groupBy) {
+        const groupedEvents = await this.prisma.event.groupBy({
+          by: [groupBy as any],
+          where: finalWhere,
+          _count: {
+            id: true,
+          },
+        });
+
+        if (!groupedEvents || groupedEvents.length === 0) {
+          throw new HttpException('No events found', HttpStatus.NOT_FOUND);
+        }
+
+        return {
+          data: groupedEvents,
+          meta: { groupBy }
+        };
+      }
+
+      // Normal paginated response
+      const skip = (page - 1) * limit;
+
+      let orderByClause: any = {};
+      if (sortBy === 'favourited') {
+        orderByClause = {
+          favouritedBy: {
+            _count: sortOrder,
+          },
+        };
+      } else {
+        orderByClause = {
+          [sortBy]: sortOrder,
+        };
+      }
+
+      const result = await this.prisma.$transaction([
+        this.prisma.event.count({ where: finalWhere }),
+        this.prisma.event.findMany({
+          where: finalWhere,
+          include: {
+            user: {
+              select: { uuid: true }
+            },
+            categories: {
+              include: {
+                categoryDetails: true
+              }
+            },
+            eventLocations: true,
+            ticketTiers: true,
+            _count: {
+              select: { favouritedBy: true }
+            }
+          },
+          orderBy: orderByClause,
+          skip,
+          take: limit,
+        })
+      ]);
+
+      const [total, events] = result;
+      const normalizedEvents = events.map((event) =>
+        this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
+      );
+
       if (!normalizedEvents || normalizedEvents.length === 0) {
         throw new HttpException('No events found', HttpStatus.NOT_FOUND);
       }
@@ -398,8 +511,8 @@ export class EventService {
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
-        error?.message || 'Failed to retrieve events',
-        HttpStatus.BAD_REQUEST
+        error?.message || 'Failed to retrieve your events',
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
@@ -510,10 +623,6 @@ export class EventService {
         })
       ]);
 
-      if (!events || events.length === 0) {
-        throw new HttpException('No events found', HttpStatus.NOT_FOUND);
-      }
-
       const normalizedEvents = events.map((event) =>
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
@@ -534,6 +643,10 @@ export class EventService {
 
   async createEvent(user: any, dto: CreateEventDto) {
     try {
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
       const result = await this.prisma.$transaction(async (tx) => {
         const { title, start, end, status, isPublic, description, categories, locations } = dto;
 
@@ -585,18 +698,24 @@ export class EventService {
 
       return result;
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
-        error?.message || 'Failed to create event',
-        HttpStatus.BAD_REQUEST
+        error?.message || 'Failed to create event - please check your input',
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
   async getEventDetail(user: any, uuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      let whereClause: any = { uuid };
+    try {
+      if (!uuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
 
-      if (!user || user.role !== UserRole.ADMIN) {
+      const result = await this.prisma.$transaction(async (tx) => {
+        let whereClause: any = { uuid };
+
+        if (!user || user.role !== UserRole.ADMIN) {
         whereClause = {
           uuid,
           OR: [
@@ -674,19 +793,36 @@ export class EventService {
       });
 
       if (!event) {
-        throw new HttpException('Event not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          !user || user.role !== UserRole.ADMIN 
+            ? 'Event not found or you do not have permission to view it'
+            : 'Event not found',
+          HttpStatus.NOT_FOUND
+        );
       }
 
       return this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to retrieve event details',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async getEventRundowns(user: any, eventUuid: string, query: GetRundownsQueryDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      // 1. Verify Event Existence and Accessibility
-      let eventWhereClause: any = { uuid: eventUuid };
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        // 1. Verify Event Existence and Accessibility
+        let eventWhereClause: any = { uuid: eventUuid };
       let isAdminOrAffiliated = false;
 
       if (!user || user.role !== UserRole.ADMIN) {
@@ -826,10 +962,6 @@ export class EventService {
         })
       ]);
 
-      if (!rundowns || rundowns.length === 0) {
-        throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
-      }
-
       const normalizedRundowns = rundowns.map((rundown) =>
         this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid }),
       );
@@ -843,13 +975,28 @@ export class EventService {
           totalPages: Math.ceil(total / limit),
         }
       };
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to retrieve event rundowns',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async getRundownDetail(user: any, eventUuid: string, rundownUuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!rundownUuid) {
+        throw new HttpException('Rundown UUID is required', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       // 1. Verify Event Accessibility
       let eventWhereClause: any = { uuid: eventUuid };
       let isAdminOrAffiliated = false;
@@ -941,13 +1088,28 @@ export class EventService {
       }
 
       return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to retrieve rundown details',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async updateEvent(user: any, uuid: string, dto: UpdateEventDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!uuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
         include: {
@@ -1059,13 +1221,31 @@ export class EventService {
       });
 
       return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to update event',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async uploadBanner(user: any, uuid: string, file: UploadedFileData) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!uuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!file) {
+        throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid, deletedAt: null },
         include: {
@@ -1133,16 +1313,31 @@ export class EventService {
       });
 
       return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to upload event banner',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async deleteEvent(user: any, uuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const event = await tx.event.findFirst({
-        where: { uuid, deletedAt: null },
-      });
+    try {
+      if (!uuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        const event = await tx.event.findFirst({
+          where: { uuid, deletedAt: null },
+        });
 
       if (!event) {
         throw new HttpException('Event not found', HttpStatus.NOT_FOUND);
@@ -1159,13 +1354,28 @@ export class EventService {
       });
 
       return { message: 'Event deleted successfully' };
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to delete event',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async createRundown(user: any, eventUuid: string, dto: CreateRundownDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
@@ -1219,13 +1429,31 @@ export class EventService {
       });
 
       return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to create rundown',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async updateRundown(user: any, eventUuid: string, rundownUuid: string, dto: UpdateRundownDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!rundownUuid) {
+        throw new HttpException('Rundown UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
@@ -1278,13 +1506,31 @@ export class EventService {
       });
 
       return this.normalizeUuidResponse(updatedRundown, { parentType: 'rundown', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to update rundown',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async deleteRundown(user: any, eventUuid: string, rundownUuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!rundownUuid) {
+        throw new HttpException('Rundown UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
@@ -1316,13 +1562,28 @@ export class EventService {
       });
 
       return { message: 'Rundown deleted successfully' };
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to delete rundown',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async addFavouriteEvent(user: any, eventUuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
       });
@@ -1362,13 +1623,28 @@ export class EventService {
       }
 
       return { message: 'Event added to favourites' };
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to add event to favourites',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async removeFavouriteEvent(user: any, eventUuid: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
       });
@@ -1391,14 +1667,32 @@ export class EventService {
       });
 
       return { message: 'Event removed from favourites' };
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to remove event from favourites',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   async addOrganizerToEvent(user: any, eventUuid: string, dto: AddOrganizerToEventDto) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      // 1. Check event exists
+    try {
+      if (!eventUuid) {
+        throw new HttpException('Event UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!dto?.organizerUuid) {
+        throw new HttpException('Organizer UUID is required', HttpStatus.BAD_REQUEST);
+      }
+      if (!user || !user.id) {
+        throw new HttpException('Unauthorized - User not found in token', HttpStatus.UNAUTHORIZED);
+      }
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        // 1. Check event exists
       const event = await tx.event.findFirst({
         where: { uuid: eventUuid, deletedAt: null },
         include: {
@@ -1481,8 +1775,15 @@ export class EventService {
       });
 
       return this.normalizeUuidResponse(fullEventOrganizer, { parentType: 'eventOrganizer', rootEventUuid: event.uuid });
-    });
+      });
 
-    return result;
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        error?.message || 'Failed to add organizer to event',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }
