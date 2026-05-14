@@ -244,6 +244,7 @@ export class EventService {
       const andConditions: any[] = [
         {
           isPublic: true,
+          deletedAt: null,
           status: {
             not: EventStatus.DRAFT,
           },
