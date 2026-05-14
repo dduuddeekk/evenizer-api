@@ -395,7 +395,7 @@ export class EventService {
 
       // Build where clause for user's events
       const andConditions: any[] = [
-        { userId: currentUser.id }
+        { userId: currentUser.id, deletedAt: null }
       ];
 
       if (search) {
