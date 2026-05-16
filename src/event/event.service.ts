@@ -802,7 +802,29 @@ export class EventService {
         );
       }
 
-      return this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
+      let isFavorited = false;
+
+      if (user?.id) {
+        const favourite = await tx.favouriteEvent.findFirst({
+          where: {
+            eventId: event.id,
+            userId: user.id,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        isFavorited = !!favourite;
+      }
+
+      const normalizedEvent = this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
+
+      return {
+        ...normalizedEvent,
+        isFavorited,
+      };
       });
 
       return result;
