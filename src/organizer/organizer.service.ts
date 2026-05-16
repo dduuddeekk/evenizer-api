@@ -406,7 +406,36 @@ export class OrganizerService {
                 isFollow = !!follow;
             }
 
-            return this.withFollowMeta(organizer, followCount, isFollow);
+            const base = this.withFollowMeta(organizer, followCount, isFollow);
+
+            const rolesMapped = (organizer.roles || []).map((r: any) => ({
+                uuid: r.uuid,
+                name: r.name,
+                description: r.description,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                deletedAt: r.deletedAt ?? null,
+            }));
+
+            const organizerMembersMapped = (organizer.organizerMembers || []).map((m: any) => ({
+                uuid: m.uuid,
+                status: m.status,
+                reason: m.reason,
+                createdAt: m.createdAt,
+                updatedAt: m.updatedAt,
+                deletedAt: m.deletedAt ?? null,
+                user: m.user,
+                role: m.role ? {
+                    uuid: m.role.uuid,
+                    name: m.role.name,
+                    description: m.role.description,
+                    createdAt: m.role.createdAt,
+                    updatedAt: m.role.updatedAt,
+                    deletedAt: m.role.deletedAt ?? null,
+                } : null,
+            }));
+
+            return { ...base, roles: rolesMapped, organizerMembers: organizerMembersMapped };
         });
 
         return result;
@@ -503,14 +532,29 @@ export class OrganizerService {
                 followedOrganizerIds = new Set(followedOrganizers.map((item) => item.organizerId));
             }
 
-            return eventOrganizers.map((eventOrganizer) => ({
-                ...eventOrganizer,
-                organizer: this.withFollowMeta(
-                    eventOrganizer.organizer,
-                    followCountMap.get(eventOrganizer.organizerId) ?? 0,
-                    followedOrganizerIds.has(eventOrganizer.organizerId),
-                ),
-            }));
+            return eventOrganizers.map((eventOrganizer) => {
+                const detailsMapped = (eventOrganizer.eventOrganizerDetails || []).map((d: any) => ({
+                    ...d,
+                    role: d.role ? {
+                        uuid: d.role.uuid,
+                        name: d.role.name,
+                        description: d.role.description,
+                        createdAt: d.role.createdAt,
+                        updatedAt: d.role.updatedAt,
+                        deletedAt: d.role.deletedAt ?? null,
+                    } : null,
+                }));
+
+                return {
+                    ...eventOrganizer,
+                    eventOrganizerDetails: detailsMapped,
+                    organizer: this.withFollowMeta(
+                        eventOrganizer.organizer,
+                        followCountMap.get(eventOrganizer.organizerId) ?? 0,
+                        followedOrganizerIds.has(eventOrganizer.organizerId),
+                    ),
+                };
+            });
         });
 
         return result;
@@ -542,7 +586,16 @@ export class OrganizerService {
                 }
             });
 
-            return role;
+            // Return UUID-based response (avoid exposing numeric ids in API responses)
+            return {
+                uuid: role.uuid,
+                name: role.name,
+                organizerUuid: organizer.uuid,
+                description: role.description,
+                createdAt: role.createdAt,
+                updatedAt: role.updatedAt,
+                deletedAt: role.deletedAt ?? null,
+            };
         });
         return result;
     }
@@ -562,7 +615,16 @@ export class OrganizerService {
                 data: { ...parsed }
             });
 
-            return updated;
+            // Map to UUID-based response
+            return {
+                uuid: updated.uuid,
+                name: updated.name,
+                organizerUuid: organizer.uuid,
+                description: updated.description,
+                createdAt: updated.createdAt,
+                updatedAt: updated.updatedAt,
+                deletedAt: updated.deletedAt ?? null,
+            };
         });
         return result;
     }
@@ -628,7 +690,25 @@ export class OrganizerService {
                 }
             });
 
-            return member;
+            const mappedRole = member.role ? {
+                uuid: member.role.uuid,
+                name: member.role.name,
+                description: member.role.description,
+                createdAt: member.role.createdAt,
+                updatedAt: member.role.updatedAt,
+                deletedAt: member.role.deletedAt ?? null,
+            } : null;
+
+            return {
+                uuid: member.uuid,
+                status: member.status,
+                reason: member.reason,
+                createdAt: member.createdAt,
+                updatedAt: member.updatedAt,
+                deletedAt: member.deletedAt ?? null,
+                user: member.user,
+                role: mappedRole,
+            };
         });
         return result;
     }
@@ -667,7 +747,25 @@ export class OrganizerService {
                 }
             });
 
-            return updated;
+            const mappedRole = updated.role ? {
+                uuid: updated.role.uuid,
+                name: updated.role.name,
+                description: updated.role.description,
+                createdAt: updated.role.createdAt,
+                updatedAt: updated.role.updatedAt,
+                deletedAt: updated.role.deletedAt ?? null,
+            } : null;
+
+            return {
+                uuid: updated.uuid,
+                status: updated.status,
+                reason: updated.reason,
+                createdAt: updated.createdAt,
+                updatedAt: updated.updatedAt,
+                deletedAt: updated.deletedAt ?? null,
+                user: updated.user,
+                role: mappedRole,
+            };
         });
         return result;
     }
