@@ -19,7 +19,7 @@ export class OrganizerService {
         isFollow = false,
         fallbackUserUuid?: string,
     ) {
-        const { id, userId, ...rest } = organizer;
+        const { id, userId, user, ...rest } = organizer;
         const userUuid = organizer?.user?.uuid ?? fallbackUserUuid;
 
         return {
