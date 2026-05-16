@@ -706,9 +706,12 @@ export class OrganizerService {
             const updated = await tx.organizer.update({
                 where: { id: organizer.id },
                 data: { ...parsed },
+                include: {
+                    user: { select: { uuid: true } }
+                }
             });
 
-            return updated;
+            return this.withFollowMeta(updated, 0, false);
         });
         return result;
     }
@@ -722,9 +725,12 @@ export class OrganizerService {
             const updated = await tx.organizer.update({
                 where: { id: organizer.id },
                 data: { logo: logoUrl },
+                include: {
+                    user: { select: { uuid: true } }
+                }
             });
 
-            return updated;
+            return this.withFollowMeta(updated, 0, false);
         });
         return result;
     }
@@ -837,9 +843,12 @@ export class OrganizerService {
             const updatedOrganizer = await tx.organizer.update({
                 where: { id: organizer.id },
                 data: { isVerified },
+                include: {
+                    user: { select: { uuid: true } }
+                }
             });
 
-            return updatedOrganizer;
+            return this.withFollowMeta(updatedOrganizer, 0, false);
         });
 
         return result;
