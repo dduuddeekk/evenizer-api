@@ -7,6 +7,13 @@ describe('EventService', () => {
   let service: EventService;
   let prisma: {
     $transaction: jest.Mock;
+    event: {
+      count: jest.Mock;
+      findMany: jest.Mock;
+    };
+    favouriteEvent: {
+      findMany: jest.Mock;
+    };
   };
   let uploadService: {
     saveImage: jest.Mock;
@@ -26,16 +33,40 @@ describe('EventService', () => {
     _count: { favouritedBy: 0, rundowns: 0 },
   };
 
+  const secondEvent = {
+    id: 12,
+    uuid: 'event-uuid-2',
+    title: 'Second Event',
+    start: new Date('2026-05-17T10:00:00.000Z'),
+    end: new Date('2026-05-17T12:00:00.000Z'),
+    user: { uuid: 'user-uuid-2' },
+    categories: [],
+    eventLocations: [],
+    ticketTiers: [],
+    eventOrganizers: [],
+    _count: { favouritedBy: 0, rundowns: 0 },
+  };
+
   beforeEach(async () => {
     prisma = {
       $transaction: jest.fn(async (callback) => callback({
         event: {
           findFirst: jest.fn(),
+          count: jest.fn(),
+          findMany: jest.fn(),
         },
         favouriteEvent: {
           findFirst: jest.fn(),
+          findMany: jest.fn(),
         },
       })),
+      event: {
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
+      favouriteEvent: {
+        findMany: jest.fn(),
+      },
     };
 
     uploadService = {
@@ -92,5 +123,23 @@ describe('EventService', () => {
       uuid: 'event-uuid',
       isFavorited: false,
     });
+  });
+
+  it('marks each event in getAllEvents based on the logged-in user favourites', async () => {
+    prisma.event.count.mockResolvedValueOnce(2);
+    prisma.event.findMany.mockResolvedValueOnce([baseEvent, secondEvent]);
+
+    prisma.favouriteEvent.findMany.mockResolvedValueOnce([
+      { eventId: 11 },
+    ]);
+
+    const result = await service.getAllEvents(
+      { id: 7, role: 'USER' },
+      { page: 1, limit: 10 } as any,
+    );
+
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0]).toMatchObject({ uuid: 'event-uuid', isFavorited: true });
+    expect(result.data[1]).toMatchObject({ uuid: 'event-uuid-2', isFavorited: false });
   });
 });

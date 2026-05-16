@@ -353,8 +353,32 @@ export class EventService {
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
 
+      let favouritedEventIds = new Set<number>();
+
+      if (user?.id && events.length > 0) {
+        const favouriteEvents = await this.prisma.favouriteEvent.findMany({
+          where: {
+            userId: user.id,
+            deletedAt: null,
+            eventId: {
+              in: events.map((event) => event.id),
+            },
+          },
+          select: {
+            eventId: true,
+          },
+        });
+
+        favouritedEventIds = new Set(favouriteEvents.map((favourite) => favourite.eventId));
+      }
+
+      const eventsWithFavouriteStatus = normalizedEvents.map((event, index) => ({
+        ...event,
+        isFavorited: favouritedEventIds.has(events[index].id),
+      }));
+
       const paginatedResult = {
-        data: normalizedEvents,
+        data: eventsWithFavouriteStatus,
         meta: {
           total,
           page,
