@@ -13,6 +13,13 @@ export class OrganizerService {
         private readonly uploadService: UploadService,
     ) { }
 
+    private withFollowCount<T>(organizer: T, followCount = 0) {
+        return {
+            ...organizer,
+            followCount,
+        };
+    }
+
     async getAllOrganizers(user: any, query: GetOrganizersQueryDto) {
         try {
             const parsed = GetOrganizersQuerySchema.parse(query);
@@ -97,12 +104,30 @@ export class OrganizerService {
 
             const [total, organizers] = result;
 
+            const organizerIds = organizers.map((organizer) => organizer.id);
+            const followCountRows = organizerIds.length > 0
+                ? await this.prisma.followOrganizer.groupBy({
+                    by: ['organizerId'],
+                    where: {
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    _count: {
+                        _all: true,
+                    },
+                })
+                : [];
+
+            const followCountMap = new Map<number, number>(
+                followCountRows.map((row) => [row.organizerId, row._count._all]),
+            );
+
             if (!organizers || organizers.length === 0) {
                 throw new HttpException('No organizers found', HttpStatus.NOT_FOUND);
             }
 
             const paginatedResult = {
-                data: organizers,
+                data: organizers.map((organizer) => this.withFollowCount(organizer, followCountMap.get(organizer.id) ?? 0)),
                 meta: {
                     total,
                     page,
@@ -135,7 +160,7 @@ export class OrganizerService {
                 },
             });
 
-            return organizer;
+            return this.withFollowCount(organizer, 0);
         });
 
         return result;
@@ -174,7 +199,14 @@ export class OrganizerService {
                 }
             }
 
-            return organizer;
+            const followCount = await tx.followOrganizer.count({
+                where: {
+                    organizerId: organizer.id,
+                    deletedAt: null,
+                }
+            });
+
+            return this.withFollowCount(organizer, followCount);
         });
 
         return result;
@@ -212,6 +244,9 @@ export class OrganizerService {
                 where: {
                     eventId: event.id,
                     deletedAt: null,
+                    organizer: {
+                        deletedAt: null,
+                    },
                     // Non-affiliated users only see ACCEPTED organizers
                     ...(!isAffiliated ? { status: EventOrganizerStatus.ACCEPTED } : {}),
                 },
@@ -223,6 +258,9 @@ export class OrganizerService {
                             logo: true,
                             description: true,
                             isVerified: true,
+                            _count: {
+                                select: { followers: true }
+                            }
                         }
                     },
                     eventOrganizerDetails: {
@@ -231,7 +269,31 @@ export class OrganizerService {
                 }
             });
 
-            return eventOrganizers;
+            const organizerIds = eventOrganizers.map((item) => item.organizerId);
+            const followCountRows = organizerIds.length > 0
+                ? await tx.followOrganizer.groupBy({
+                    by: ['organizerId'],
+                    where: {
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    _count: {
+                        _all: true,
+                    },
+                })
+                : [];
+
+            const followCountMap = new Map<number, number>(
+                followCountRows.map((row) => [row.organizerId, row._count._all]),
+            );
+
+            return eventOrganizers.map((eventOrganizer) => ({
+                ...eventOrganizer,
+                organizer: this.withFollowCount(
+                    eventOrganizer.organizer,
+                    followCountMap.get(eventOrganizer.organizerId) ?? 0,
+                ),
+            }));
         });
 
         return result;
@@ -466,18 +528,43 @@ export class OrganizerService {
 
     async followOrganizer(organizerUuid: string, currentUser: any) {
         const result = await this.prisma.$transaction(async (tx) => {
-            const organizer = await tx.organizer.findUnique({ where: { uuid: organizerUuid } });
+            const organizer = await tx.organizer.findFirst({
+                where: {
+                    uuid: organizerUuid,
+                    deletedAt: null,
+                },
+            });
             if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
 
             const existingFollow = await tx.followOrganizer.findFirst({
                 where: {
                     userId: currentUser.id,
                     organizerId: organizer.id,
+                    deletedAt: null,
                 }
             });
 
             if (existingFollow) {
                 return { message: 'Already following this organizer' };
+            }
+
+            const existingSoftDeletedFollow = await tx.followOrganizer.findFirst({
+                where: {
+                    userId: currentUser.id,
+                    organizerId: organizer.id,
+                    deletedAt: {
+                        not: null,
+                    },
+                },
+                orderBy: {
+                    updatedAt: 'desc',
+                }
+            });
+
+            if (existingSoftDeletedFollow) {
+                await tx.followOrganizer.delete({
+                    where: { id: existingSoftDeletedFollow.id },
+                });
             }
 
             await tx.followOrganizer.create({
@@ -495,13 +582,19 @@ export class OrganizerService {
 
     async unfollowOrganizer(organizerUuid: string, currentUser: any) {
         const result = await this.prisma.$transaction(async (tx) => {
-            const organizer = await tx.organizer.findUnique({ where: { uuid: organizerUuid } });
+            const organizer = await tx.organizer.findFirst({
+                where: {
+                    uuid: organizerUuid,
+                    deletedAt: null,
+                },
+            });
             if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
 
             const existingFollow = await tx.followOrganizer.findFirst({
                 where: {
                     userId: currentUser.id,
                     organizerId: organizer.id,
+                    deletedAt: null,
                 }
             });
 

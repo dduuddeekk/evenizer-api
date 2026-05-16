@@ -1654,20 +1654,18 @@ export class EventService {
       });
 
       if (softDeletedFavourite) {
-        // Restore it
-        await tx.favouriteEvent.update({
-          where: { id: softDeletedFavourite.id },
-          data: { deletedAt: null }
-        });
-      } else {
-        // Create new
-        await tx.favouriteEvent.create({
-          data: {
-            eventId: event.id,
-            userId: user.id
-          }
+        await tx.favouriteEvent.delete({
+          where: { id: softDeletedFavourite.id }
         });
       }
+
+      // Create new
+      await tx.favouriteEvent.create({
+        data: {
+          eventId: event.id,
+          userId: user.id
+        }
+      });
 
       return { message: 'Event added to favourites' };
       });
@@ -1708,9 +1706,8 @@ export class EventService {
         throw new HttpException('Event is not in your favourites', HttpStatus.BAD_REQUEST);
       }
 
-      await tx.favouriteEvent.update({
+      await tx.favouriteEvent.delete({
         where: { id: existingFavourite.id },
-        data: { deletedAt: new Date() }
       });
 
       return { message: 'Event removed from favourites' };
