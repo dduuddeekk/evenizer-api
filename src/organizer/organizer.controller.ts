@@ -28,6 +28,16 @@ export class OrganizerController {
         } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
     }
 
+    @Get('my-organizer')
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard)
+    async getMyOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto) {
+        try {
+            const organizers = await this.organizerService.getMyOrganizers(req.user, query);
+            return new APIResponse(HttpStatus.OK, 'Your organizers retrieved successfully', organizers);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
     @Get('event/:eventUuid')
     @ApiBearerAuth()
     @UseGuards(OptionalJwtAuthGuard)

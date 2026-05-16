@@ -201,6 +201,155 @@ export class OrganizerService {
         return result;
     }
 
+    async getMyOrganizers(user: any, query: GetOrganizersQueryDto) {
+        try {
+            if (!user || !user.uuid) {
+                throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+            }
+
+            // Find the user by uuid from token payload
+            const currentUser = await this.prisma.user.findFirst({
+                where: { uuid: user.uuid },
+                select: { id: true }
+            });
+
+            if (!currentUser) {
+                throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+            }
+
+            const { search, status, isVerified, isPublic, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 10 } = query;
+
+            // Build where clause for user's organizers (owner or active member)
+            const andConditions: any[] = [
+                { deletedAt: null },
+                {
+                    OR: [
+                        { userId: currentUser.id }, // Owner
+                        {
+                            organizerMembers: {
+                                some: { userId: currentUser.id, status: MemberStatus.ACTIVE, deletedAt: null }
+                            }
+                        } // Active member
+                    ]
+                }
+            ];
+
+            if (search) {
+                andConditions.push({ name: { contains: search, mode: 'insensitive' } });
+            }
+
+            if (status) {
+                andConditions.push({ status });
+            }
+
+            if (isVerified !== undefined) {
+                andConditions.push({ isVerified });
+            }
+
+            if (isPublic !== undefined) {
+                andConditions.push({ isPublic });
+            }
+
+            const finalWhere = { AND: andConditions };
+            const skip = (page - 1) * limit;
+
+            let orderByClause: any = {};
+            if (sortBy === 'followers') {
+                orderByClause = {
+                    followers: {
+                        _count: sortOrder,
+                    },
+                };
+            } else {
+                orderByClause = {
+                    [sortBy]: sortOrder,
+                };
+            }
+
+            const result = await this.prisma.$transaction([
+                this.prisma.organizer.count({ where: finalWhere }),
+                this.prisma.organizer.findMany({
+                    where: finalWhere,
+                    include: {
+                        user: {
+                            select: { uuid: true }
+                        },
+                        _count: {
+                            select: { followers: true, eventOrganizers: true }
+                        }
+                    },
+                    orderBy: orderByClause,
+                    skip,
+                    take: limit,
+                })
+            ]);
+
+            const [total, organizers] = result;
+
+            const organizerIds = organizers.map((organizer) => organizer.id);
+            const followCountRows = organizerIds.length > 0
+                ? await this.prisma.followOrganizer.groupBy({
+                    by: ['organizerId'],
+                    where: {
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    _count: {
+                        _all: true,
+                    },
+                })
+                : [];
+
+            const followCountMap = new Map<number, number>(
+                followCountRows.map((row) => [row.organizerId, row._count._all]),
+            );
+
+            let followedOrganizerIds = new Set<number>();
+            if (organizerIds.length > 0) {
+                const followedOrganizers = await this.prisma.followOrganizer.findMany({
+                    where: {
+                        userId: currentUser.id,
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    select: {
+                        organizerId: true,
+                    },
+                });
+
+                followedOrganizerIds = new Set(followedOrganizers.map((item) => item.organizerId));
+            }
+
+            if (!organizers || organizers.length === 0) {
+                throw new HttpException('No organizers found', HttpStatus.NOT_FOUND);
+            }
+
+            const paginatedResult = {
+                data: organizers.map((organizer) =>
+                    this.withFollowMeta(
+                        organizer,
+                        followCountMap.get(organizer.id) ?? 0,
+                        followedOrganizerIds.has(organizer.id),
+                    ),
+                ),
+                meta: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit),
+                }
+            };
+
+            return paginatedResult;
+        } catch (error: any) {
+            if (error instanceof HttpException) throw error;
+            throw new HttpException(
+                error?.message || 'Failed to retrieve your organizers',
+                HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
     async getOrganizerDetail(user: any, uuid: string) {
         const result = await this.prisma.$transaction(async (tx) => {
             const organizer = await tx.organizer.findFirst({
