@@ -13,9 +13,18 @@ export class OrganizerService {
         private readonly uploadService: UploadService,
     ) { }
 
-    private withFollowMeta<T>(organizer: T, followCount = 0, isFollow = false) {
+    private withFollowMeta<T extends Record<string, any>>(
+        organizer: T,
+        followCount = 0,
+        isFollow = false,
+        fallbackUserUuid?: string,
+    ) {
+        const { id, userId, ...rest } = organizer;
+        const userUuid = organizer?.user?.uuid ?? fallbackUserUuid;
+
         return {
-            ...organizer,
+            ...rest,
+            ...(userUuid ? { userUuid } : {}),
             followCount,
             isFollow,
         };
@@ -93,6 +102,9 @@ export class OrganizerService {
                 this.prisma.organizer.findMany({
                     where: finalWhere,
                     include: {
+                        user: {
+                            select: { uuid: true }
+                        },
                         _count: {
                             select: { followers: true, eventOrganizers: true }
                         }
@@ -183,7 +195,7 @@ export class OrganizerService {
                 },
             });
 
-            return this.withFollowMeta(organizer, 0, false);
+            return this.withFollowMeta(organizer, 0, false, user?.uuid);
         });
 
         return result;
