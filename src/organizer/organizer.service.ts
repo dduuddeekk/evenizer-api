@@ -13,10 +13,11 @@ export class OrganizerService {
         private readonly uploadService: UploadService,
     ) { }
 
-    private withFollowCount<T>(organizer: T, followCount = 0) {
+    private withFollowMeta<T>(organizer: T, followCount = 0, isFollow = false) {
         return {
             ...organizer,
             followCount,
+            isFollow,
         };
     }
 
@@ -122,12 +123,34 @@ export class OrganizerService {
                 followCountRows.map((row) => [row.organizerId, row._count._all]),
             );
 
+            let followedOrganizerIds = new Set<number>();
+            if (user?.id && organizerIds.length > 0) {
+                const followedOrganizers = await this.prisma.followOrganizer.findMany({
+                    where: {
+                        userId: user.id,
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    select: {
+                        organizerId: true,
+                    },
+                });
+
+                followedOrganizerIds = new Set(followedOrganizers.map((item) => item.organizerId));
+            }
+
             if (!organizers || organizers.length === 0) {
                 throw new HttpException('No organizers found', HttpStatus.NOT_FOUND);
             }
 
             const paginatedResult = {
-                data: organizers.map((organizer) => this.withFollowCount(organizer, followCountMap.get(organizer.id) ?? 0)),
+                data: organizers.map((organizer) =>
+                    this.withFollowMeta(
+                        organizer,
+                        followCountMap.get(organizer.id) ?? 0,
+                        followedOrganizerIds.has(organizer.id),
+                    ),
+                ),
                 meta: {
                     total,
                     page,
@@ -160,7 +183,7 @@ export class OrganizerService {
                 },
             });
 
-            return this.withFollowCount(organizer, 0);
+            return this.withFollowMeta(organizer, 0, false);
         });
 
         return result;
@@ -206,7 +229,23 @@ export class OrganizerService {
                 }
             });
 
-            return this.withFollowCount(organizer, followCount);
+            let isFollow = false;
+            if (user?.id) {
+                const follow = await tx.followOrganizer.findFirst({
+                    where: {
+                        organizerId: organizer.id,
+                        userId: user.id,
+                        deletedAt: null,
+                    },
+                    select: {
+                        id: true,
+                    },
+                });
+
+                isFollow = !!follow;
+            }
+
+            return this.withFollowMeta(organizer, followCount, isFollow);
         });
 
         return result;
@@ -287,11 +326,28 @@ export class OrganizerService {
                 followCountRows.map((row) => [row.organizerId, row._count._all]),
             );
 
+            let followedOrganizerIds = new Set<number>();
+            if (user?.id && organizerIds.length > 0) {
+                const followedOrganizers = await tx.followOrganizer.findMany({
+                    where: {
+                        userId: user.id,
+                        organizerId: { in: organizerIds },
+                        deletedAt: null,
+                    },
+                    select: {
+                        organizerId: true,
+                    },
+                });
+
+                followedOrganizerIds = new Set(followedOrganizers.map((item) => item.organizerId));
+            }
+
             return eventOrganizers.map((eventOrganizer) => ({
                 ...eventOrganizer,
-                organizer: this.withFollowCount(
+                organizer: this.withFollowMeta(
                     eventOrganizer.organizer,
                     followCountMap.get(eventOrganizer.organizerId) ?? 0,
+                    followedOrganizerIds.has(eventOrganizer.organizerId),
                 ),
             }));
         });
