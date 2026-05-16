@@ -35,14 +35,17 @@ export const GetEventsQuerySchema = z.object({
 });
 
 export class GetEventsQueryDto {
+  @ApiPropertyOptional({ example: 'music' })
   @IsOptional()
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ example: 'music' })
   @IsOptional()
   @IsString()
   category?: string;
 
+  @ApiPropertyOptional({ enum: EventStatus })
   @IsOptional()
   @IsEnum(EventStatus)
   status?: EventStatus;
@@ -169,14 +172,17 @@ export const GetRundownsQuerySchema = z.object({
 });
 
 export class GetRundownsQueryDto {
+  @ApiPropertyOptional({ example: 'Opening' })
   @IsOptional()
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ enum: RundownStatus })
   @IsOptional()
   @IsEnum(RundownStatus)
   status?: RundownStatus;
 
+  @ApiPropertyOptional({ enum: RundownVisibility })
   @IsOptional()
   @IsEnum(RundownVisibility)
   visibility?: RundownVisibility;

@@ -27,10 +27,12 @@ export const GetOrganizersQuerySchema = z.object({
 });
 
 export class GetOrganizersQueryDto {
+    @ApiPropertyOptional({ example: 'Evenizer' })
     @IsOptional()
     @IsString()
     search?: string;
 
+    @ApiPropertyOptional({ enum: OrganizerStatus })
     @IsOptional()
     @IsEnum(OrganizerStatus)
     status?: OrganizerStatus;

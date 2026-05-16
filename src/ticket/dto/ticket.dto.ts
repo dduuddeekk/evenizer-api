@@ -31,10 +31,12 @@ export const GetUserTicketsQuerySchema = z.object({
 });
 
 export class GetUserTicketsQueryDto {
+  @ApiPropertyOptional({ enum: TicketStatus })
   @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
 
+  @ApiPropertyOptional({ enum: PaymentStatus })
   @IsOptional()
   @IsEnum(PaymentStatus)
   paymentStatus?: PaymentStatus;
