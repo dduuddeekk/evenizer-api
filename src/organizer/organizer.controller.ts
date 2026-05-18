@@ -58,6 +58,16 @@ export class OrganizerController {
         } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
     }
 
+    @Get(':uuid/rundowns')
+    @ApiBearerAuth()
+    @UseGuards(OptionalJwtAuthGuard)
+    async getOrganizerRundowns(@Req() req: any, @Param('uuid') uuid: string) {
+        try {
+            const rundowns = await this.organizerService.getOrganizerRundowns(req.user, uuid);
+            return new APIResponse(HttpStatus.OK, 'Organizer rundowns retrieved successfully', rundowns);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
     @Post()
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard, EmailVerifiedGuard)

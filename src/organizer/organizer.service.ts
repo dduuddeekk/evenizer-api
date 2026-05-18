@@ -441,6 +441,85 @@ export class OrganizerService {
         return result;
     }
 
+    async getOrganizerRundowns(user: any, organizerUuid: string) {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const organizer = await tx.organizer.findFirst({ where: { uuid: organizerUuid, deletedAt: null } });
+            if (!organizer) throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+
+            // Visibility: if organizer is not public, owner or active members can view rundowns
+            if (!organizer.isPublic) {
+                // owner or admin allowed
+                if (user && (user.role === UserRole.ADMIN || organizer.userId === user.id)) {
+                    // allowed
+                } else {
+                    // check active member
+                    const member = await tx.organizerMember.findFirst({
+                        where: { organizerId: organizer.id, userId: user?.id ?? -1, status: MemberStatus.ACTIVE, deletedAt: null },
+                        select: { id: true }
+                    });
+                    if (!member) {
+                        throw new HttpException('Organizer not found', HttpStatus.NOT_FOUND);
+                    }
+                }
+            }
+
+            // Determine affiliation for public organizers (used to show event visibility when needed)
+            let isAffiliated = false;
+            if (user) {
+                if (user.role === UserRole.ADMIN || organizer.userId === user.id) {
+                    isAffiliated = true;
+                } else {
+                    const member = await tx.organizerMember.findFirst({
+                        where: { organizerId: organizer.id, userId: user.id, status: MemberStatus.ACTIVE, deletedAt: null },
+                        select: { id: true }
+                    });
+                    if (member) isAffiliated = true;
+                }
+            }
+
+            // find events this organizer is attached to
+            const eventOrgRows = await tx.eventOrganizer.findMany({
+                where: { organizerId: organizer.id, deletedAt: null },
+                select: { eventId: true }
+            });
+            const eventIds = eventOrgRows.map(r => r.eventId);
+            if (eventIds.length === 0) throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
+
+            const events = await tx.event.findMany({
+                where: { id: { in: eventIds }, deletedAt: null },
+                select: { id: true, uuid: true, title: true, isPublic: true, userId: true }
+            });
+
+            const allowedEventIds = events
+                .filter(e => e.isPublic || isAffiliated || (user && (user.role === UserRole.ADMIN || e.userId === user.id)))
+                .map(e => e.id);
+
+            if (allowedEventIds.length === 0) throw new HttpException('No rundowns found', HttpStatus.NOT_FOUND);
+
+            const rundowns = await tx.rundown.findMany({
+                where: { eventId: { in: allowedEventIds }, deletedAt: null },
+                include: { event: { select: { uuid: true, title: true } } },
+                orderBy: [{ date: 'asc' }, { start: 'asc' }]
+            });
+
+            return rundowns.map((r: any) => ({
+                uuid: r.uuid,
+                title: r.title,
+                date: r.date,
+                start: r.start,
+                end: r.end,
+                status: r.status,
+                visibility: r.visibility,
+                event: r.event ? { uuid: r.event.uuid, title: r.event.title } : null,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+                deletedAt: r.deletedAt ?? null,
+            }));
+        });
+
+        return result;
+    }
+
     async getOrganizersByEvent(user: any, eventUuid: string) {
         const result = await this.prisma.$transaction(async (tx) => {
             // Find event
