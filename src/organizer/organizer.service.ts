@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
+import { MlService } from '../ml/ml.service';
 import { UserRole, OrganizerStatus, EventOrganizerStatus, MemberStatus } from '@prisma/client';
 import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema, UpdateOrganizerDto, UpdateOrganizerSchema, CreateRoleDto, CreateRoleSchema, UpdateRoleDto, UpdateRoleSchema, InviteMemberDto, InviteMemberSchema, UpdateMemberDto, UpdateMemberSchema } from './dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
@@ -12,6 +13,7 @@ export class OrganizerService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly uploadService: UploadService,
+        private readonly mlService: MlService,
     ) { }
 
     private withFollowMeta<T extends Record<string, any>>(
@@ -34,7 +36,7 @@ export class OrganizerService {
     async getAllOrganizers(user: any, query: GetOrganizersQueryDto) {
         try {
             const parsed = GetOrganizersQuerySchema.parse(query);
-            const { search, status, isVerified, isPublic, sortBy, sortOrder, page, limit } = parsed;
+            const { search, status, isVerified, isPublic, eventDescription, sortBy, sortOrder, page, limit } = parsed;
             let whereClause: any = {};
 
             if (!user || user.role !== UserRole.ADMIN) {
@@ -86,7 +88,10 @@ export class OrganizerService {
             const skip = (page - 1) * limit;
 
             let orderByClause: any;
-            if (sortBy === 'followers') {
+            if (eventDescription && sortBy !== 'followers') {
+                // If using ML model matching, don't sort by DB field yet; sort in memory after scoring
+                orderByClause = { createdAt: 'desc' };
+            } else if (sortBy === 'followers') {
                 orderByClause = {
                     followers: {
                         _count: sortOrder,
@@ -111,8 +116,8 @@ export class OrganizerService {
                         }
                     },
                     orderBy: orderByClause,
-                    skip,
-                    take: limit,
+                    skip: eventDescription ? 0 : skip, // Fetch all if using ML, will paginate after scoring
+                    take: eventDescription ? undefined : limit,
                 })
             ]);
 
@@ -156,14 +161,52 @@ export class OrganizerService {
                 throw new HttpException('No organizers found', HttpStatus.NOT_FOUND);
             }
 
-            const paginatedResult = {
-                data: organizers.map((organizer) =>
-                    this.withFollowMeta(
-                        organizer,
-                        followCountMap.get(organizer.id) ?? 0,
-                        followedOrganizerIds.has(organizer.id),
-                    ),
+            // Map organizers with follow metadata
+            let organizersWithMeta = organizers.map((organizer) =>
+                this.withFollowMeta(
+                    organizer,
+                    followCountMap.get(organizer.id) ?? 0,
+                    followedOrganizerIds.has(organizer.id),
                 ),
+            );
+
+            // If eventDescription provided, score each organizer with ML model
+            if (eventDescription && eventDescription.trim().length > 0) {
+                const organizersWithScores = await Promise.all(
+                    organizersWithMeta.map(async (org) => {
+                        const matchScore = await this.mlService.predictMatch(
+                            eventDescription,
+                            org.description || '',
+                        );
+                        return {
+                            ...org,
+                            matchScore: matchScore ?? 0,
+                        };
+                    }),
+                );
+
+                // Sort by match score (descending)
+                organizersWithScores.sort((a, b) => b.matchScore - a.matchScore);
+
+                // Apply pagination after sorting
+                const paginatedOrganizers = organizersWithScores.slice(skip, skip + limit);
+
+                const paginatedResult = {
+                    data: paginatedOrganizers,
+                    meta: {
+                        total: organizersWithScores.length,
+                        page,
+                        limit,
+                        totalPages: Math.ceil(organizersWithScores.length / limit),
+                    }
+                };
+
+                return paginatedResult;
+            }
+
+            // Standard pagination without ML
+            const paginatedResult = {
+                data: organizersWithMeta,
                 meta: {
                     total,
                     page,

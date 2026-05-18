@@ -31,6 +31,8 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-tflite": "^0.0.1-alpha.10",
     "@vercel/blob": "^2.3.3",
     "argon2": "^0.44.0",
     "class-transformer": "^0.5.1",

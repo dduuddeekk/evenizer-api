@@ -20,6 +20,7 @@ export const GetOrganizersQuerySchema = z.object({
     status: z.nativeEnum(OrganizerStatus).optional(),
     isVerified: z.coerce.boolean().optional(),
     isPublic: z.coerce.boolean().optional(),
+    eventDescription: z.string().optional(),
     page: z.coerce.number().min(1).optional().default(1),
     limit: z.coerce.number().min(1).max(100).optional().default(10),
     sortBy: z.nativeEnum(OrganizerSortBy).optional().default(OrganizerSortBy.CREATED_AT),
@@ -46,6 +47,11 @@ export class GetOrganizersQueryDto {
     @Type(() => Boolean)
     @IsBoolean()
     isPublic?: boolean;
+
+    @ApiPropertyOptional({ example: 'Acara musik dengan ornamen tenda dan sound system' })
+    @IsOptional()
+    @IsString()
+    eventDescription?: string;
 
     @IsOptional()
     @Type(() => Number)
