@@ -7,7 +7,7 @@ import { APIResponse, ErrorResponse } from '../common/dto';
 import { OptionalJwtAuthGuard, JwtAuthGuard, RolesGuard, EmailVerifiedGuard } from '../common/guards';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { UploadedFile as UploadedFileData } from '../common/types';
-import { GetOrganizersQueryDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto, VerifyOrganizerDto } from './dto';
+import { GetOrganizersQueryDto, GetOrganizersBodyDto, CreateOrganizerDto, UpdateOrganizerDto, CreateRoleDto, UpdateRoleDto, InviteMemberDto, UpdateMemberDto, VerifyOrganizerDto } from './dto';
 
 const err = (e: any) => new HttpException(
     new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error', e?.message || e),
@@ -20,10 +20,11 @@ export class OrganizerController {
 
     @Get()
     @ApiBearerAuth()
+    @ApiBody({ schema: { type: 'object', properties: { eventDescription: { type: 'string', nullable: true, example: 'Acara musik dengan ornamen tenda dan sound system 🎉' } } } })
     @UseGuards(OptionalJwtAuthGuard)
-    async getAllOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto) {
+    async getAllOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto, @Body() body: GetOrganizersBodyDto) {
         try {
-            const organizers = await this.organizerService.getAllOrganizers(req.user, query);
+            const organizers = await this.organizerService.getAllOrganizers(req.user, query, body?.eventDescription ?? null);
             return new APIResponse(HttpStatus.OK, 'Organizers retrieved successfully', organizers);
         } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
     }

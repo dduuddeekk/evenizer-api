@@ -33,10 +33,11 @@ export class OrganizerService {
         };
     }
 
-    async getAllOrganizers(user: any, query: GetOrganizersQueryDto) {
+    async getAllOrganizers(user: any, query: GetOrganizersQueryDto, eventDescription?: string | null) {
         try {
             const parsed = GetOrganizersQuerySchema.parse(query);
-            const { search, status, isVerified, isPublic, eventDescription, sortBy, sortOrder, page, limit } = parsed;
+            const { search, status, isVerified, isPublic, sortBy, sortOrder, page, limit } = parsed;
+            const eventDescriptionText = typeof eventDescription === 'string' ? eventDescription : '';
             let whereClause: any = {};
 
             if (!user || user.role !== UserRole.ADMIN) {
@@ -88,7 +89,7 @@ export class OrganizerService {
             const skip = (page - 1) * limit;
 
             let orderByClause: any;
-            if (eventDescription && sortBy !== 'followers') {
+            if (eventDescriptionText && sortBy !== 'followers') {
                 // If using ML model matching, don't sort by DB field yet; sort in memory after scoring
                 orderByClause = { createdAt: 'desc' };
             } else if (sortBy === 'followers') {
@@ -116,8 +117,8 @@ export class OrganizerService {
                         }
                     },
                     orderBy: orderByClause,
-                    skip: eventDescription ? 0 : skip, // Fetch all if using ML, will paginate after scoring
-                    take: eventDescription ? undefined : limit,
+                    skip: eventDescriptionText ? 0 : skip, // Fetch all if using ML, will paginate after scoring
+                    take: eventDescriptionText ? undefined : limit,
                 })
             ]);
 
@@ -171,11 +172,11 @@ export class OrganizerService {
             );
 
             // If eventDescription provided, score each organizer with ML model
-            if (eventDescription && eventDescription.trim().length > 0) {
+            if (eventDescriptionText.trim().length > 0) {
                 const organizersWithScores = await Promise.all(
                     organizersWithMeta.map(async (org) => {
                         const matchScore = await this.mlService.predictMatch(
-                            eventDescription,
+                            eventDescriptionText,
                             org.description || '',
                         );
                         return {
