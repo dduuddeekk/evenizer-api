@@ -5,6 +5,7 @@ import { UserRole, OrganizerStatus, EventOrganizerStatus, MemberStatus } from '@
 import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema, UpdateOrganizerDto, UpdateOrganizerSchema, CreateRoleDto, CreateRoleSchema, UpdateRoleDto, UpdateRoleSchema, InviteMemberDto, InviteMemberSchema, UpdateMemberDto, UpdateMemberSchema } from './dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { UploadedFile } from 'src/common/types/uploaded-file.type';
+import { decryptLocation, encryptLocation } from '../common/utils/crypto.util';
 
 @Injectable()
 export class OrganizerService {
@@ -364,7 +365,8 @@ export class OrganizerService {
                             role: true,
                         }
                     },
-                    _count: { select: { followers: true, eventOrganizers: true } }
+                        _count: { select: { followers: true, eventOrganizers: true } },
+                    organizerLocations: true,
                 }
             });
 
@@ -435,7 +437,28 @@ export class OrganizerService {
                 } : null,
             }));
 
-            return { ...base, roles: rolesMapped, organizerMembers: organizerMembersMapped };
+            // Decrypt organizer locations if present
+            const organizerLocationsMapped = (organizer.organizerLocations || []).map((loc: any) => {
+                try {
+                    return {
+                        uuid: loc.uuid,
+                        location: decryptLocation(loc.location),
+                        createdAt: loc.createdAt,
+                        updatedAt: loc.updatedAt,
+                        deletedAt: loc.deletedAt ?? null,
+                    };
+                } catch {
+                    return {
+                        uuid: loc.uuid,
+                        location: loc.location,
+                        createdAt: loc.createdAt,
+                        updatedAt: loc.updatedAt,
+                        deletedAt: loc.deletedAt ?? null,
+                    };
+                }
+            });
+
+            return { ...base, roles: rolesMapped, organizerMembers: organizerMembersMapped, organizerLocations: organizerLocationsMapped };
         });
 
         return result;

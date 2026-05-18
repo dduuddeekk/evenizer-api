@@ -4,6 +4,7 @@ import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus, MemberS
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto, EventLocationDto } from './dto';
 import { UploadService } from '../upload/upload.service';
 import type { UploadedFile as UploadedFileData } from '../common/types';
+import { encryptLocation, decryptLocation } from '../common/utils/crypto.util';
 
 @Injectable()
 export class EventService {
@@ -20,7 +21,7 @@ export class EventService {
     return {
       create: locations.map((item) => ({
         type: item.type,
-        location: item.location,
+        location: encryptLocation(item.location),
       })),
     };
   }
@@ -349,6 +350,15 @@ export class EventService {
       ]);
 
       const [total, events] = result;
+      // Decrypt event location strings before normalizing
+      for (const ev of events) {
+        if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
+          for (const loc of ev.eventLocations) {
+            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+          }
+        }
+      }
+
       const normalizedEvents = events.map((event) =>
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
@@ -514,6 +524,14 @@ export class EventService {
       ]);
 
       const [total, events] = result;
+      // Decrypt event location strings before normalizing
+      for (const ev of events) {
+        if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
+          for (const loc of ev.eventLocations) {
+            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+          }
+        }
+      }
       const normalizedEvents = events.map((event) =>
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
@@ -648,6 +666,15 @@ export class EventService {
         })
       ]);
 
+      // Decrypt event location strings before normalizing
+      for (const ev of events) {
+        if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
+          for (const loc of ev.eventLocations) {
+            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+          }
+        }
+      }
+
       const normalizedEvents = events.map((event) =>
         this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid }),
       );
@@ -716,6 +743,13 @@ export class EventService {
             ticketTiers: true,
           }
         });
+
+        // Decrypt created event locations before returning
+        if (event.eventLocations && Array.isArray(event.eventLocations)) {
+          for (const loc of event.eventLocations) {
+            try { loc.location = decryptLocation(loc.location); } catch { }
+          }
+        }
 
         // Banner should be uploaded via PATCH /event/:uuid/banner
         return this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
@@ -841,6 +875,13 @@ export class EventService {
         });
 
         isFavorited = !!favourite;
+      }
+
+      // Decrypt eventLocations on detail
+      if (event.eventLocations && Array.isArray(event.eventLocations)) {
+        for (const loc of event.eventLocations) {
+          try { loc.location = decryptLocation(loc.location); } catch { }
+        }
       }
 
       const normalizedEvent = this.normalizeUuidResponse(event, { parentType: 'event', rootEventUuid: event.uuid });
@@ -1009,6 +1050,13 @@ export class EventService {
         })
       ]);
 
+      // Decrypt rundown location payloads before normalizing
+      for (const rd of rundowns) {
+        if (rd.location && rd.location.location) {
+          try { rd.location.location = decryptLocation(rd.location.location); } catch { }
+        }
+      }
+
       const normalizedRundowns = rundowns.map((rundown) =>
         this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid }),
       );
@@ -1132,6 +1180,11 @@ export class EventService {
 
       if (!rundown) {
         throw new HttpException('Rundown not found or you do not have permission to view it', HttpStatus.NOT_FOUND);
+      }
+
+      // Decrypt rundown.location if exists
+      if (rundown.location && rundown.location.location) {
+        try { rundown.location.location = decryptLocation(rundown.location.location); } catch { }
       }
 
       return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
@@ -1267,6 +1320,13 @@ export class EventService {
         }
       });
 
+      // Decrypt updated event locations before returning
+      if (updatedEvent.eventLocations && Array.isArray(updatedEvent.eventLocations)) {
+        for (const loc of updatedEvent.eventLocations) {
+          try { loc.location = decryptLocation(loc.location); } catch { }
+        }
+      }
+
       return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
       });
 
@@ -1358,6 +1418,13 @@ export class EventService {
           ticketTiers: true,
         },
       });
+
+      // Decrypt updated event locations before returning
+      if (updatedEvent.eventLocations && Array.isArray(updatedEvent.eventLocations)) {
+        for (const loc of updatedEvent.eventLocations) {
+          try { loc.location = decryptLocation(loc.location); } catch { }
+        }
+      }
 
       return this.normalizeUuidResponse(updatedEvent, { parentType: 'event', rootEventUuid: event.uuid });
       });
