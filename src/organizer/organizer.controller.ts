@@ -20,9 +20,19 @@ export class OrganizerController {
 
     @Get()
     @ApiBearerAuth()
+    @UseGuards(OptionalJwtAuthGuard)
+    async getAllOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto) {
+        try {
+            const organizers = await this.organizerService.getAllOrganizers(req.user, query, null);
+            return new APIResponse(HttpStatus.OK, 'Organizers retrieved successfully', organizers);
+        } catch (e: any) { if (e instanceof HttpException) throw e; throw err(e); }
+    }
+
+    @Post('search')
+    @ApiBearerAuth()
     @ApiBody({ schema: { type: 'object', properties: { eventDescription: { type: 'string', nullable: true, example: 'Acara musik dengan ornamen tenda dan sound system 🎉' } } } })
     @UseGuards(OptionalJwtAuthGuard)
-    async getAllOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto, @Body() body: GetOrganizersBodyDto) {
+    async searchOrganizers(@Req() req: any, @Query() query: GetOrganizersQueryDto, @Body() body: GetOrganizersBodyDto) {
         try {
             const organizers = await this.organizerService.getAllOrganizers(req.user, query, body?.eventDescription ?? null);
             return new APIResponse(HttpStatus.OK, 'Organizers retrieved successfully', organizers);
