@@ -440,13 +440,24 @@ export class OrganizerService {
             // Decrypt organizer locations if present
             const organizerLocationsMapped = (organizer.organizerLocations || []).map((loc: any) => {
                 try {
-                    return {
-                        uuid: loc.uuid,
-                        location: decryptLocation(loc.location),
-                        createdAt: loc.createdAt,
-                        updatedAt: loc.updatedAt,
-                        deletedAt: loc.deletedAt ?? null,
-                    };
+                    const dec = decryptLocation(loc.location);
+                    try {
+                        return {
+                            uuid: loc.uuid,
+                            location: JSON.parse(dec),
+                            createdAt: loc.createdAt,
+                            updatedAt: loc.updatedAt,
+                            deletedAt: loc.deletedAt ?? null,
+                        };
+                    } catch {
+                        return {
+                            uuid: loc.uuid,
+                            location: dec,
+                            createdAt: loc.createdAt,
+                            updatedAt: loc.updatedAt,
+                            deletedAt: loc.deletedAt ?? null,
+                        };
+                    }
                 } catch {
                     return {
                         uuid: loc.uuid,

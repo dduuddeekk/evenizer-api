@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsDate, IsArray, IsNotEmpty } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsDate, IsArray, IsNotEmpty, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -88,10 +88,11 @@ export const CreateEventSchema = z.object({
   isPublic: z.boolean().optional(),
   description: z.string().optional(),
   categories: z.array(z.string()).optional(),
-  locations: z.array(z.object({
-    type: z.nativeEnum(EventLocationType),
-    location: z.string().min(1),
-  })).optional(),
+  locations: z.array(z.discriminatedUnion('type', [
+    z.object({ type: z.literal(EventLocationType.ONLINE), location: z.string().min(1) }),
+    z.object({ type: z.literal(EventLocationType.OFFLINE), latitude: z.number(), longitude: z.number() }),
+    z.object({ type: z.literal(EventLocationType.HYBRID), latitude: z.number(), longitude: z.number(), location: z.string().min(1) }),
+  ])).optional(),
 });
 
 export class EventLocationDto {
@@ -102,6 +103,18 @@ export class EventLocationDto {
   @ApiProperty({ example: 'Main Hall' })
   @IsString()
   location!: string;
+
+  @ApiPropertyOptional({ example: 12.34567 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: 98.76543 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  longitude?: number;
 }
 
 export class CreateEventDto {

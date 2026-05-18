@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventStatus, UserRole, RundownVisibility, EventOrganizerStatus, MemberStatus } from '@prisma/client';
 import { GetEventsQueryDto, CreateEventDto, GetRundownsQueryDto, UpdateEventDto, CreateRundownDto, UpdateRundownDto, AddOrganizerToEventDto, EventLocationDto } from './dto';
+import { EventLocationType } from '@prisma/client';
 import { UploadService } from '../upload/upload.service';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { encryptLocation, decryptLocation } from '../common/utils/crypto.util';
@@ -19,10 +20,22 @@ export class EventService {
     }
 
     return {
-      create: locations.map((item) => ({
-        type: item.type,
-        location: encryptLocation(item.location),
-      })),
+      create: locations.map((item) => {
+        if (item.type === EventLocationType.ONLINE) {
+          // Online: store plain location string (e.g. URL or text)
+          return { type: item.type, location: item.location };
+        }
+
+        if (item.type === EventLocationType.OFFLINE) {
+          // Offline: expect lat/lon in request; store encrypted JSON
+          const payload = JSON.stringify({ latitude: item.latitude, longitude: item.longitude });
+          return { type: item.type, location: encryptLocation(payload) };
+        }
+
+        // Hybrid: store encrypted JSON containing both coords and textual location
+        const payload = JSON.stringify({ latitude: item.latitude, longitude: item.longitude, location: item.location });
+        return { type: item.type, location: encryptLocation(payload) };
+      }),
     };
   }
 
@@ -353,8 +366,11 @@ export class EventService {
       // Decrypt event location strings before normalizing
       for (const ev of events) {
         if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
-          for (const loc of ev.eventLocations) {
-            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+            for (const loc of ev.eventLocations) {
+              try {
+                const dec = decryptLocation(loc.location);
+                try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+              } catch { }
           }
         }
       }
@@ -527,8 +543,11 @@ export class EventService {
       // Decrypt event location strings before normalizing
       for (const ev of events) {
         if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
-          for (const loc of ev.eventLocations) {
-            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+            for (const loc of ev.eventLocations) {
+              try {
+                const dec = decryptLocation(loc.location);
+                try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+              } catch { }
           }
         }
       }
@@ -669,8 +688,11 @@ export class EventService {
       // Decrypt event location strings before normalizing
       for (const ev of events) {
         if (ev.eventLocations && Array.isArray(ev.eventLocations)) {
-          for (const loc of ev.eventLocations) {
-            try { loc.location = decryptLocation(loc.location); } catch { /* leave as-is on error */ }
+            for (const loc of ev.eventLocations) {
+              try {
+                const dec = decryptLocation(loc.location);
+                try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+              } catch { }
           }
         }
       }
@@ -747,7 +769,10 @@ export class EventService {
         // Decrypt created event locations before returning
         if (event.eventLocations && Array.isArray(event.eventLocations)) {
           for (const loc of event.eventLocations) {
-            try { loc.location = decryptLocation(loc.location); } catch { }
+            try {
+              const dec = decryptLocation(loc.location);
+              try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+            } catch { }
           }
         }
 
@@ -880,7 +905,10 @@ export class EventService {
       // Decrypt eventLocations on detail
       if (event.eventLocations && Array.isArray(event.eventLocations)) {
         for (const loc of event.eventLocations) {
-          try { loc.location = decryptLocation(loc.location); } catch { }
+          try {
+            const dec = decryptLocation(loc.location);
+            try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+          } catch {}
         }
       }
 
@@ -1053,7 +1081,10 @@ export class EventService {
       // Decrypt rundown location payloads before normalizing
       for (const rd of rundowns) {
         if (rd.location && rd.location.location) {
-          try { rd.location.location = decryptLocation(rd.location.location); } catch { }
+          try {
+            const dec = decryptLocation(rd.location.location);
+            try { rd.location.location = JSON.parse(dec); } catch { rd.location.location = dec; }
+          } catch {}
         }
       }
 
@@ -1184,7 +1215,10 @@ export class EventService {
 
       // Decrypt rundown.location if exists
       if (rundown.location && rundown.location.location) {
-        try { rundown.location.location = decryptLocation(rundown.location.location); } catch { }
+        try {
+          const dec = decryptLocation(rundown.location.location);
+          try { rundown.location.location = JSON.parse(dec); } catch { rundown.location.location = dec; }
+        } catch {}
       }
 
       return this.normalizeUuidResponse(rundown, { parentType: 'rundown', rootEventUuid: event.uuid });
@@ -1323,7 +1357,10 @@ export class EventService {
       // Decrypt updated event locations before returning
       if (updatedEvent.eventLocations && Array.isArray(updatedEvent.eventLocations)) {
         for (const loc of updatedEvent.eventLocations) {
-          try { loc.location = decryptLocation(loc.location); } catch { }
+          try {
+            const dec = decryptLocation(loc.location);
+            try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+          } catch {}
         }
       }
 
@@ -1422,7 +1459,10 @@ export class EventService {
       // Decrypt updated event locations before returning
       if (updatedEvent.eventLocations && Array.isArray(updatedEvent.eventLocations)) {
         for (const loc of updatedEvent.eventLocations) {
-          try { loc.location = decryptLocation(loc.location); } catch { }
+          try {
+            const dec = decryptLocation(loc.location);
+            try { loc.location = JSON.parse(dec); } catch { loc.location = dec; }
+          } catch {}
         }
       }
 
