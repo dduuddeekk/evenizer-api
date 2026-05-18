@@ -5,7 +5,7 @@ import { UserRole, OrganizerStatus, EventOrganizerStatus, MemberStatus } from '@
 import { GetOrganizersQueryDto, GetOrganizersQuerySchema, CreateOrganizerDto, CreateOrganizerSchema, UpdateOrganizerDto, UpdateOrganizerSchema, CreateRoleDto, CreateRoleSchema, UpdateRoleDto, UpdateRoleSchema, InviteMemberDto, InviteMemberSchema, UpdateMemberDto, UpdateMemberSchema } from './dto';
 import type { UploadedFile as UploadedFileData } from '../common/types';
 import { UploadedFile } from 'src/common/types/uploaded-file.type';
-import { decryptLocation, encryptLocation } from '../common/utils/crypto.util';
+import { decryptLocation } from '../common/utils/crypto.util';
 
 @Injectable()
 export class OrganizerService {
@@ -442,9 +442,11 @@ export class OrganizerService {
                 try {
                     const dec = decryptLocation(loc.location);
                     try {
+                        const parsed = JSON.parse(dec);
                         return {
                             uuid: loc.uuid,
-                            location: JSON.parse(dec),
+                            latitude: parsed.latitude ?? null,
+                            longitude: parsed.longitude ?? null,
                             createdAt: loc.createdAt,
                             updatedAt: loc.updatedAt,
                             deletedAt: loc.deletedAt ?? null,
@@ -453,6 +455,8 @@ export class OrganizerService {
                         return {
                             uuid: loc.uuid,
                             location: dec,
+                            latitude: null,
+                            longitude: null,
                             createdAt: loc.createdAt,
                             updatedAt: loc.updatedAt,
                             deletedAt: loc.deletedAt ?? null,
@@ -462,6 +466,8 @@ export class OrganizerService {
                     return {
                         uuid: loc.uuid,
                         location: loc.location,
+                        latitude: null,
+                        longitude: null,
                         createdAt: loc.createdAt,
                         updatedAt: loc.updatedAt,
                         deletedAt: loc.deletedAt ?? null,
